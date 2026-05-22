@@ -151,6 +151,7 @@ def obter_analise(analise_id: int, db: Session = Depends(get_db)):
     return registro
 
 
-# DEVE ser o último — serve index.html como fallback SPA
+# Serve o frontend apenas em ambiente local (na Vercel é servido como estático)
 _frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
-app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+if os.path.isdir(_frontend_dir):
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
