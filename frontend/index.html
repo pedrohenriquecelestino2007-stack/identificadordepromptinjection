@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LexGuard — Detecção de Prompt Injection Jurídica</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+<aside id="sidebar">
+  <div class="sidebar-logo">
+    <h1>⚖ LexGuard</h1>
+    <p>Segurança Jurídica com IA</p>
+  </div>
+  <nav>
+    <a class="nav-item active" data-section="dashboard">
+      <span class="nav-icon">▦</span> Dashboard
+    </a>
+    <a class="nav-item" data-section="texto">
+      <span class="nav-icon">✎</span> Analisar Texto
+    </a>
+    <a class="nav-item" data-section="pdf">
+      <span class="nav-icon">⬆</span> Analisar PDF
+    </a>
+    <a class="nav-item" data-section="gerar">
+      <span class="nav-icon">✦</span> Gerar Peça
+    </a>
+    <a class="nav-item" data-section="historico">
+      <span class="nav-icon">☰</span> Histórico
+    </a>
+  </nav>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────────────────────────── -->
+<main id="main">
+
+  <!-- Dashboard -->
+  <section id="section-dashboard" class="section active">
+    <h2>Dashboard</h2>
+    <p class="section-subtitle">Visão geral das análises realizadas</p>
+
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-label">Total Analisados</div>
+        <div class="card-value" id="dash-total">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Nível Crítico</div>
+        <div class="card-value danger" id="dash-critico">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Nível Alto</div>
+        <div class="card-value warning" id="dash-alto">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Última Análise</div>
+        <div class="card-value" style="font-size:16px;margin-top:8px" id="dash-ultima">—</div>
+      </div>
+    </div>
+
+    <h3 style="font-size:15px;margin-bottom:12px">Análises Recentes</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Arquivo / Tipo</th>
+            <th>Nível</th>
+            <th>Data</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="dash-table-body">
+          <tr><td colspan="5" class="empty-state">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Analisar Texto -->
+  <section id="section-texto" class="section">
+    <h2>Analisar Texto</h2>
+    <p class="section-subtitle">Cole o texto do documento jurídico para verificar injeção de prompt</p>
+
+    <div class="form-group">
+      <label for="input-texto">Texto do documento</label>
+      <textarea id="input-texto" rows="10" placeholder="Cole aqui o texto completo da petição, contestação ou qualquer peça jurídica…"></textarea>
+    </div>
+    <button class="btn btn-primary" id="btn-analisar-texto">
+      <span>Analisar</span>
+    </button>
+
+    <div class="loading-msg hidden" id="loading-texto">
+      <span class="spinner"></span> Analisando com duas camadas de IA…
+    </div>
+
+    <div class="result-panel hidden" id="result-texto"></div>
+  </section>
+
+  <!-- Analisar PDF -->
+  <section id="section-pdf" class="section">
+    <h2>Analisar PDF</h2>
+    <p class="section-subtitle">Faça upload de uma petição em PDF para análise completa</p>
+
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-icon">📄</div>
+      <strong>Arraste o PDF aqui</strong>
+      <p>ou clique para selecionar</p>
+      <input type="file" id="pdf-input" accept=".pdf" style="display:none" />
+    </div>
+
+    <div id="pdf-filename" style="font-size:13px;color:var(--text-muted);margin-bottom:12px"></div>
+
+    <button class="btn btn-primary" id="btn-analisar-pdf" disabled>
+      <span>Analisar PDF</span>
+    </button>
+
+    <div class="loading-msg hidden" id="loading-pdf">
+      <span class="spinner"></span> Extraindo texto e analisando com IA…
+    </div>
+
+    <div class="result-panel hidden" id="result-pdf"></div>
+  </section>
+
+  <!-- Gerar Peça -->
+  <section id="section-gerar" class="section">
+    <h2>Gerar Peça Jurídica</h2>
+    <p class="section-subtitle">Gere peças jurídicas profissionais — o resultado é automaticamente verificado</p>
+
+    <div class="form-group">
+      <label for="gerar-tipo">Tipo de peça</label>
+      <select id="gerar-tipo">
+        <option value="peticao">Petição Inicial</option>
+        <option value="contestacao">Contestação</option>
+        <option value="recurso">Recurso</option>
+        <option value="minuta">Minuta</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="gerar-partes">Partes (autor, réu, advogados)</label>
+      <textarea id="gerar-partes" rows="3" placeholder="Ex: Autor: João da Silva, CPF 000.000.000-00…"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="gerar-fatos">Fatos <span style="color:var(--danger)">*</span></label>
+      <textarea id="gerar-fatos" rows="6" placeholder="Descreva os fatos relevantes do caso…"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="gerar-pedidos">Pedidos</label>
+      <textarea id="gerar-pedidos" rows="4" placeholder="Liste os pedidos a serem formulados…"></textarea>
+    </div>
+    <button class="btn btn-primary" id="btn-gerar">
+      <span>Gerar Peça</span>
+    </button>
+
+    <div class="loading-msg hidden" id="loading-gerar">
+      <span class="spinner"></span> Gerando peça jurídica e verificando segurança…
+    </div>
+
+    <div class="result-panel hidden" id="result-gerar"></div>
+  </section>
+
+  <!-- Histórico -->
+  <section id="section-historico" class="section">
+    <h2>Histórico de Análises</h2>
+    <p class="section-subtitle">Todas as análises realizadas — clique em uma linha para ver detalhes</p>
+
+    <div class="filters">
+      <div class="form-group">
+        <label for="filtro-nivel">Nível de risco</label>
+        <select id="filtro-nivel">
+          <option value="">Todos</option>
+          <option value="CRITICO">Crítico</option>
+          <option value="ALTO">Alto</option>
+          <option value="MEDIO">Médio</option>
+          <option value="BAIXO">Baixo</option>
+          <option value="NENHUM">Nenhum</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost" id="btn-filtrar">Filtrar</button>
+      <button class="btn btn-ghost" id="btn-refresh-hist">↺ Atualizar</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tipo</th>
+            <th>Arquivo</th>
+            <th>Nível</th>
+            <th>Data</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="hist-table-body">
+          <tr><td colspan="6" class="empty-state">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Detail panel inside historico -->
+    <div class="result-panel hidden" id="result-historico" style="margin-top:24px"></div>
+  </section>
+
+</main>
+
+<div id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
