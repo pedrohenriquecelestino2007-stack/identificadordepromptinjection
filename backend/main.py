@@ -41,7 +41,8 @@ def startup():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": "gemini-2.0-flash"}
+    key = os.environ.get("GEMINI_API_KEY", "NAO_DEFINIDA")
+    return {"status": "ok", "model": "gemini-2.0-flash", "key_suffix": key[-6:] if len(key) > 6 else key}
 
 
 @app.post("/analisar/texto", response_model=ResultadoCompleto)
