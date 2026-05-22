@@ -119,10 +119,11 @@ def _call_gemini(system: str, contents, max_tokens: int = 4096, json_mode: bool 
         return response.text
     except Exception as exc:
         msg = str(exc)
+        print(f"[GEMINI ERROR] {msg}")
         if "api_key" in msg.lower() or "api key" in msg.lower() or "invalid" in msg.lower():
             raise HTTPException(401, "GEMINI_API_KEY inválida ou ausente.")
         if "quota" in msg.lower() or "429" in msg or "rate" in msg.lower():
-            raise HTTPException(429, "Limite de requisições Gemini atingido. Tente novamente em instantes.")
+            raise HTTPException(429, f"Limite de requisições Gemini atingido. Detalhe: {msg[:300]}")
         raise HTTPException(502, f"Erro da API Gemini: {msg}")
 
 
