@@ -12,6 +12,22 @@ function showToast(msg, type = 'error') {
   toastTimer = setTimeout(() => { el.className = ''; }, 4000);
 }
 
+// ── Mobile sidebar ──────────────────────────────────────────────────────────
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebar-overlay');
+const menuBtn = document.getElementById('menu-toggle');
+
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  overlay.classList.remove('open');
+}
+
+menuBtn.addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('open');
+});
+overlay.addEventListener('click', closeSidebar);
+
 // ── Navigation ─────────────────────────────────────────────────────────────
 function showSection(name) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -20,6 +36,7 @@ function showSection(name) {
   if (sec) sec.classList.add('active');
   const nav = document.querySelector(`.nav-item[data-section="${name}"]`);
   if (nav) nav.classList.add('active');
+  closeSidebar();
 }
 
 document.querySelectorAll('.nav-item').forEach(a => {
