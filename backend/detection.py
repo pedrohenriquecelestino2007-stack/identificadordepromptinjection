@@ -117,14 +117,33 @@ def _call_gemini(system: str, contents, max_tokens: int = 4096, json_mode: bool 
             config=config,
         )
         return response.text
+    except HTTPException:
+        raise
     except Exception as exc:
         msg = str(exc)
-        print(f"[GEMINI ERROR] {msg}")
-        if "api_key" in msg.lower() or "api key" in msg.lower() or "invalid" in msg.lower():
-            raise HTTPException(401, "GEMINI_API_KEY inválida ou ausente.")
-        if "quota" in msg.lower() or "429" in msg or "rate" in msg.lower():
-            raise HTTPException(429, f"Limite de requisições Gemini atingido. Detalhe: {msg[:300]}")
-        raise HTTPException(502, f"Erro da API Gemini: {msg}")
+        print(f"[GEMINI ERROR] tipo={type(exc).__name__} msg={msg}")
+        msg_lower = msg.lower()
+        if any(k in msg_lower for k in ("api_key", "api key", "invalid api", "permission denied", "unauthenticated")):
+            raise HTTPException(401, f"GEMINI_API_KEY inválida ou sem permissão. Detalhe: {msg}")
+        if any(k in msg_lower for k in ("quota", "rate limit", "resource_exhausted")) or "429" in msg:
+            raise HTTPException(429, f"Cota da API Gemini esgotada. Detalhe: {msg}")
+        raise HTTPException(502, f"Erro da API Gemini ({type(exc).__name__}): {msg}")
+
+
+def testar_conexao_gemini() -> dict:
+    """Testa a conectividade com a API Gemini. Retorna status e erro real, sem lançar exceção."""
+    try:
+        config = types.GenerateContentConfig(
+            max_output_tokens=5,
+        )
+        client.models.generate_content(
+            model=MODEL,
+            contents="Responda apenas: ok",
+            config=config,
+        )
+        return {"status": "ok", "erro": None}
+    except Exception as exc:
+        return {"status": "erro", "erro": f"{type(exc).__name__}: {exc}"}
 
 
 def detectar_layer1(texto: str) -> ResultadoLayer1:

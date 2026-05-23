@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 from database import Analise, PecaGerada, create_tables, get_db
-from detection import analisar_completo, analisar_pdf
+from detection import analisar_completo, analisar_pdf, testar_conexao_gemini
 from generation import gerar_e_verificar
 from schemas import (
     AnaliseDetalhe,
@@ -42,7 +42,15 @@ def startup():
 @app.get("/health")
 def health():
     key = os.environ.get("GEMINI_API_KEY", "NAO_DEFINIDA")
-    return {"status": "ok", "model": "gemini-2.0-flash", "key_suffix": key[-6:] if len(key) > 6 else key}
+    key_suffix = key[-6:] if len(key) > 6 else key
+    gemini = testar_conexao_gemini()
+    return {
+        "status": "ok" if gemini["status"] == "ok" else "degradado",
+        "model": "gemini-2.0-flash",
+        "key_suffix": key_suffix,
+        "gemini_api": gemini["status"],
+        "gemini_erro": gemini["erro"],
+    }
 
 
 @app.post("/analisar/texto", response_model=ResultadoCompleto)
