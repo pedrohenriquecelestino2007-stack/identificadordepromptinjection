@@ -167,16 +167,84 @@ def analisar_completo(texto: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:
     return l1, l2
 
 
+def _detectar_ocultos_pdf(conteudo_bytes: bytes) -> list[str]:
+    """Detecta texto branco, fonte minúscula e páginas só com imagem via pymupdf."""
+    try:
+        import fitz  # pymupdf
+    except ImportError:
+        return []
+
+    alertas: list[str] = []
+    try:
+        doc = fitz.open(stream=conteudo_bytes, filetype="pdf")
+        for page_num, page in enumerate(doc[:50], 1):
+            page_text = page.get_text().strip()
+            images = page.get_images(full=False)
+
+            if images and not page_text:
+                alertas.append(
+                    f"[PÁGINA {page_num} — SÓ IMAGEM]: {len(images)} imagem(ns) sem texto extraível "
+                    f"— possível instrução oculta embutida em imagem"
+                )
+
+            rawdict = page.get_text("rawdict", flags=0)
+            for block in rawdict.get("blocks", []):
+                if block.get("type") != 0:
+                    continue
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        text = span.get("text", "").strip()
+                        if len(text) < 3:
+                            continue
+                        size = span.get("size", 12)
+                        color = span.get("color", 0)
+                        r = (color >> 16) & 0xFF
+                        g = (color >> 8) & 0xFF
+                        b = color & 0xFF
+                        if r > 240 and g > 240 and b > 240:
+                            alertas.append(
+                                f"[TEXTO BRANCO OCULTO — Página {page_num}]: \"{text[:300]}\""
+                            )
+                        elif size < 2:
+                            alertas.append(
+                                f"[TEXTO MINÚSCULO {size:.1f}pt — Página {page_num}]: \"{text[:300]}\""
+                            )
+        doc.close()
+    except Exception as exc:
+        print(f"[pymupdf scan] {exc}")
+    return alertas
+
+
 def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
     import pdfplumber
 
-    partes = []
+    ocultos = _detectar_ocultos_pdf(conteudo_bytes)
+    partes: list[str] = []
+
+    if ocultos:
+        partes.append(
+            "⚠ PRÉ-ANÁLISE DETECTOU CONTEÚDO SUSPEITO:\n" + "\n".join(ocultos)
+        )
+
     with pdfplumber.open(io.BytesIO(conteudo_bytes)) as pdf:
-        paginas = pdf.pages[:30]
-        for page in paginas:
+        for page in pdf.pages[:50]:
             texto = page.extract_text() or ""
             partes.append(f"[PÁGINA {page.page_number}]\n{texto}")
-    return "\n\n".join(partes)
+
+    resultado = "\n\n".join(partes)
+
+    # Truncagem inteligente para documentos muito longos
+    if len(resultado) > 60_000:
+        mid = len(resultado) // 2
+        resultado = (
+            resultado[:25_000]
+            + "\n\n[... DOCUMENTO LONGO — TRECHO CENTRAL ...]\n\n"
+            + resultado[mid - 5_000 : mid + 5_000]
+            + "\n\n[... TRECHO FINAL ...]\n\n"
+            + resultado[-15_000:]
+        )
+
+    return resultado
 
 
 def _extrair_texto_docx(conteudo_bytes: bytes) -> str:
@@ -193,10 +261,10 @@ def analisar_pdf(conteudo_bytes: bytes, filename: str) -> tuple[ResultadoLayer1,
     except Exception as exc:
         raise HTTPException(422, f"Não foi possível extrair texto do PDF: {exc}")
 
-    if len(texto.strip()) < 50:
+    if len(texto.strip()) < 10:
         raise HTTPException(
             422,
-            "PDF não contém texto extraível (pode ser digitalizado/imagem). Envie um PDF com texto selecionável.",
+            "PDF não contém conteúdo analisável. Verifique se o arquivo não está corrompido.",
         )
 
     return analisar_completo(texto)
