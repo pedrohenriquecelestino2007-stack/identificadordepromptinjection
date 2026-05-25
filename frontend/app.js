@@ -4,6 +4,20 @@ const API_BASE = window.location.hostname === 'localhost'
   ? 'http://localhost:8000'
   : 'https://identificadordepromptinjection.onrender.com';
 
+// ── Tema claro/escuro ──────────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.body.setAttribute('data-theme', theme === 'dark' ? 'dark' : '');
+  const btn = document.getElementById('btn-theme');
+  if (btn) btn.textContent = theme === 'dark' ? '☀' : '🌙';
+  localStorage.setItem('lg_theme', theme);
+}
+
+applyTheme(localStorage.getItem('lg_theme') || 'light');
+
+document.getElementById('btn-theme').addEventListener('click', () => {
+  applyTheme((localStorage.getItem('lg_theme') || 'light') === 'dark' ? 'light' : 'dark');
+});
+
 // ── Auth state ─────────────────────────────────────────────────────────────
 let authToken = localStorage.getItem('lg_token') || null;
 let authUser  = JSON.parse(localStorage.getItem('lg_user') || 'null');
