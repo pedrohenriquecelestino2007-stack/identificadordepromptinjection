@@ -177,7 +177,7 @@ def _detectar_ocultos_pdf(conteudo_bytes: bytes) -> list[str]:
     alertas: list[str] = []
     try:
         doc = fitz.open(stream=conteudo_bytes, filetype="pdf")
-        for page_num, page in enumerate(doc[:50], 1):
+        for page_num, page in enumerate(doc, 1):
             page_text = page.get_text().strip()
             images = page.get_images(full=False)
 
@@ -227,7 +227,7 @@ def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
         )
 
     with pdfplumber.open(io.BytesIO(conteudo_bytes)) as pdf:
-        for page in pdf.pages[:50]:
+        for page in pdf.pages:
             texto = page.extract_text() or ""
             partes.append(f"[PÁGINA {page.page_number}]\n{texto}")
 
