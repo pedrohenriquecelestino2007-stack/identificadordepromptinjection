@@ -12,7 +12,7 @@ from schemas import ResultadoLayer1, ResultadoLayer2
 
 load_dotenv()
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.0-flash-lite"
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 SCHEMA_LAYER1 = """{

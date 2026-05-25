@@ -46,7 +46,7 @@ def health():
     gemini = testar_conexao_gemini()
     return {
         "status": "ok" if gemini["status"] == "ok" else "degradado",
-        "model": "gemini-2.0-flash",
+        "model": "gemini-2.0-flash-lite",
         "key_suffix": key_suffix,
         "gemini_api": gemini["status"],
         "gemini_erro": gemini["erro"],
