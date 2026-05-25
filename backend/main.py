@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from auth import create_token, get_current_user, hash_password, verify_password
 from database import Analise, PecaGerada, User, create_tables, get_db, migrate_tables
-from detection import analisar_completo, analisar_pdf, testar_conexao_groq
+from detection import analisar_completo, analisar_documento, analisar_pdf, testar_conexao_groq
 from generation import gerar_e_verificar
 from schemas import (
     AnaliseDetalhe,
@@ -133,14 +133,15 @@ async def analisar_pdf_endpoint(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(400, "Apenas arquivos PDF são suportados.")
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else ""
+    if ext not in {"pdf", "docx", "txt"}:
+        raise HTTPException(400, "Formato não suportado. Envie PDF, DOCX ou TXT.")
 
     conteudo = await file.read()
     if len(conteudo) > 20 * 1024 * 1024:
-        raise HTTPException(413, "PDF muito grande. Limite máximo: 20 MB.")
+        raise HTTPException(413, "Arquivo muito grande. Limite máximo: 20 MB.")
 
-    l1, l2 = analisar_pdf(conteudo, file.filename)
+    l1, l2 = analisar_documento(conteudo, file.filename)
 
     registro = Analise(
         user_id=user.id,

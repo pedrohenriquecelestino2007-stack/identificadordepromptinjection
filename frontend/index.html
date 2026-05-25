@@ -162,22 +162,30 @@
     <div class="result-panel hidden" id="result-texto"></div>
   </section>
 
-  <!-- Analisar PDF -->
+  <!-- Analisar Documento -->
   <section id="section-pdf" class="section">
-    <h2>Analisar PDF</h2>
-    <p class="section-subtitle">Faça upload de uma petição em PDF para análise completa</p>
+    <h2>Analisar Documento</h2>
+    <p class="section-subtitle">Faça upload de um documento para análise completa — suporta PDF, DOCX e TXT</p>
 
     <div class="drop-zone" id="drop-zone">
       <div class="drop-icon">📄</div>
-      <strong>Arraste o PDF aqui</strong>
-      <p>ou clique para selecionar</p>
-      <input type="file" id="pdf-input" accept=".pdf" style="display:none" />
+      <strong>Arraste o arquivo aqui</strong>
+      <p>ou clique para selecionar · PDF, DOCX, TXT</p>
+      <input type="file" id="pdf-input" accept=".pdf,.docx,.txt" style="display:none" />
     </div>
 
     <div id="pdf-filename" style="font-size:13px;color:var(--text-muted);margin-bottom:12px"></div>
 
+    <div id="pdf-preview-wrap" class="pdf-preview-wrap hidden">
+      <div class="pdf-preview-header">
+        <span>Visualização do documento</span>
+        <button class="btn-icon" onclick="closePdfPreview()">✕</button>
+      </div>
+      <iframe id="pdf-preview-frame" src="" class="pdf-viewer"></iframe>
+    </div>
+
     <button class="btn btn-primary" id="btn-analisar-pdf" disabled>
-      <span>Analisar PDF</span>
+      <span>Analisar</span>
     </button>
 
     <div class="loading-msg hidden" id="loading-pdf">
@@ -267,6 +275,35 @@
   </section>
 
 </main>
+
+<!-- ── Modal de compartilhamento ──────────────────────────────────────────── -->
+<div id="share-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Compartilhar Análise</h3>
+      <button class="btn-icon" id="btn-close-share">✕</button>
+    </div>
+    <p class="modal-desc">Qualquer pessoa com este link pode visualizar esta análise, sem precisar de conta.</p>
+    <div class="share-link-row">
+      <input type="text" id="share-link-input" readonly />
+      <button class="btn btn-primary" id="btn-copy-link">Copiar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Página pública de análise compartilhada ────────────────────────────── -->
+<div id="shared-page" class="hidden">
+  <div class="shared-header">
+    <div class="shared-logo">⚖ LexGuard</div>
+    <a href="/" class="btn btn-primary" style="font-size:13px;padding:8px 16px">Criar conta grátis</a>
+  </div>
+  <div class="shared-body">
+    <div id="shared-loading" class="loading-msg" style="justify-content:center;padding:60px 0">
+      <span class="spinner"></span> Carregando análise…
+    </div>
+    <div class="result-panel hidden" id="result-shared"></div>
+  </div>
+</div>
 
 <div id="toast"></div>
 

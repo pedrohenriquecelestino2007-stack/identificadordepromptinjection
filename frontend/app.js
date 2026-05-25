@@ -230,7 +230,7 @@ const NIVEL_INFO = {
   NENHUM:  { icon: '✅', label: 'Sem Ameaças',   desc: 'Nenhuma injeção de prompt detectada' },
 };
 
-function renderResultado(container, data, title = 'Resultado da Análise') {
+function renderResultado(container, data, title = 'Resultado da Análise', analiseId = null) {
   const l1   = data.layer1 || data;
   const l2   = data.layer2 || null;
   const info = NIVEL_INFO[l1.nivel_geral] || NIVEL_INFO.NENHUM;
@@ -258,6 +258,10 @@ function renderResultado(container, data, title = 'Resultado da Análise') {
       ${l2.ajustes ? `<div class="auditoria-text" style="margin-top:8px;color:var(--warning)">Ajustes: ${escHtml(l2.ajustes)}</div>` : ''}
     </div>` : '';
 
+  const shareBtn = analiseId
+    ? `<button class="btn btn-ghost" onclick="openShareModal(${analiseId})">🔗 Compartilhar</button>`
+    : '';
+
   container.innerHTML = `
     <div class="risk-banner risk-banner-${l1.nivel_geral}">
       <div class="risk-banner-icon">${info.icon}</div>
@@ -274,8 +278,17 @@ function renderResultado(container, data, title = 'Resultado da Análise') {
     <div class="recomendacao-box" style="margin-top:20px">
       <h4>Recomendação</h4>
       <p>${escHtml(l1.recomendacao)}</p>
+    </div>
+    <div class="result-actions">
+      ${shareBtn}
+      <button class="btn btn-ghost" onclick="exportarPDF()">🖨 Exportar PDF</button>
     </div>`;
   container.classList.remove('hidden');
+}
+
+// ── Export / Print ─────────────────────────────────────────────────────────
+function exportarPDF() {
+  window.print();
 }
 
 // ── Loading helpers ────────────────────────────────────────────────────────
@@ -295,7 +308,7 @@ document.getElementById('btn-analisar-texto').addEventListener('click', async ()
   const texto = document.getElementById('input-texto').value.trim();
   if (!texto) { showToast('Digite ou cole um texto para analisar.'); return; }
 
-  const btn    = document.getElementById('btn-analisar-texto');
+  const btn     = document.getElementById('btn-analisar-texto');
   const resultEl = document.getElementById('result-texto');
   resultEl.classList.add('hidden');
   setLoading('loading-texto', btn, true);
@@ -311,7 +324,7 @@ document.getElementById('btn-analisar-texto').addEventListener('click', async ()
       throw new Error(err.detail || 'Erro desconhecido');
     }
     const data = await res.json();
-    renderResultado(resultEl, data, 'Análise de Texto');
+    renderResultado(resultEl, data, 'Análise de Texto', data.id_salvo || null);
     refreshDashboard();
   } catch (e) {
     showToast(`Erro: ${e.message}`);
@@ -320,13 +333,13 @@ document.getElementById('btn-analisar-texto').addEventListener('click', async ()
   }
 });
 
-// ── Analisar PDF ───────────────────────────────────────────────────────────
+// ── Analisar Documento (PDF / DOCX / TXT) ──────────────────────────────────
 let selectedPdfFile = null;
 
-const dropZone   = document.getElementById('drop-zone');
-const pdfInput   = document.getElementById('pdf-input');
+const dropZone    = document.getElementById('drop-zone');
+const pdfInput    = document.getElementById('pdf-input');
 const pdfFilename = document.getElementById('pdf-filename');
-const btnPdf     = document.getElementById('btn-analisar-pdf');
+const btnPdf      = document.getElementById('btn-analisar-pdf');
 
 dropZone.addEventListener('click', () => pdfInput.click());
 
@@ -347,17 +360,44 @@ pdfInput.addEventListener('change', () => {
 });
 
 function setPdfFile(file) {
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    showToast('Apenas arquivos PDF são suportados.');
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['pdf', 'docx', 'txt'].includes(ext)) {
+    showToast('Formato não suportado. Use PDF, DOCX ou TXT.');
     return;
   }
   selectedPdfFile = file;
-  pdfFilename.textContent = `Arquivo selecionado: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+  const sizeKb = (file.size / 1024).toFixed(1);
+  pdfFilename.textContent = `Arquivo selecionado: ${file.name} (${sizeKb} KB)`;
   btnPdf.disabled = false;
+
+  const previewWrap  = document.getElementById('pdf-preview-wrap');
+  const previewFrame = document.getElementById('pdf-preview-frame');
+  if (ext === 'pdf') {
+    const prevUrl = previewFrame.dataset.objectUrl;
+    if (prevUrl) URL.revokeObjectURL(prevUrl);
+    const url = URL.createObjectURL(file);
+    previewFrame.dataset.objectUrl = url;
+    previewFrame.src = url;
+    previewWrap.classList.remove('hidden');
+  } else {
+    closePdfPreview();
+  }
+}
+
+function closePdfPreview() {
+  const previewWrap  = document.getElementById('pdf-preview-wrap');
+  const previewFrame = document.getElementById('pdf-preview-frame');
+  previewWrap.classList.add('hidden');
+  const prevUrl = previewFrame.dataset.objectUrl;
+  if (prevUrl) {
+    URL.revokeObjectURL(prevUrl);
+    delete previewFrame.dataset.objectUrl;
+    previewFrame.src = '';
+  }
 }
 
 document.getElementById('btn-analisar-pdf').addEventListener('click', async () => {
-  if (!selectedPdfFile) { showToast('Selecione um arquivo PDF primeiro.'); return; }
+  if (!selectedPdfFile) { showToast('Selecione um arquivo primeiro.'); return; }
 
   const resultEl = document.getElementById('result-pdf');
   resultEl.classList.add('hidden');
@@ -372,7 +412,7 @@ document.getElementById('btn-analisar-pdf').addEventListener('click', async () =
       throw new Error(err.detail || 'Erro desconhecido');
     }
     const data = await res.json();
-    renderResultado(resultEl, data, `Análise: ${selectedPdfFile.name}`);
+    renderResultado(resultEl, data, `Análise: ${selectedPdfFile.name}`, data.id_salvo || null);
     refreshDashboard();
   } catch (e) {
     showToast(`Erro: ${e.message}`);
@@ -428,7 +468,10 @@ function renderPecaResult(container, data) {
       ${statusIcon} ${statusText}
     </div>
     <div class="peca-content" id="peca-texto">${escHtml(data.conteudo)}</div>
-    <button class="btn btn-ghost" onclick="downloadPeca()">⬇ Baixar como .txt</button>
+    <div class="result-actions">
+      <button class="btn btn-ghost" onclick="downloadPeca()">⬇ Baixar como .txt</button>
+      <button class="btn btn-ghost" onclick="exportarPDF()">🖨 Exportar PDF</button>
+    </div>
     ${data.analise_injection.achados && data.analise_injection.achados.length > 0 ? `
       <div style="margin-top:20px">
         <div class="achados-title">Achados na peça gerada</div>
@@ -478,7 +521,7 @@ async function refreshDashboard() {
     tbody.innerHTML = recent.map(i => `
       <tr>
         <td>#${i.id}</td>
-        <td>${i.tipo === 'pdf' ? '📄 PDF' : '✎ Texto'} ${escHtml(i.filename || '')}</td>
+        <td>${i.tipo === 'pdf' ? '📄 Documento' : '✎ Texto'} ${escHtml(i.filename || '')}</td>
         <td>${badgeHtml(i.nivel_geral)}</td>
         <td>${fmtDate(i.criado_em)}</td>
         <td><span class="td-link" onclick="abrirAnalise(${i.id})">Ver</span></td>
@@ -503,7 +546,7 @@ async function carregarHistorico(nivel = '') {
     tbody.innerHTML = items.map(i => `
       <tr>
         <td>#${i.id}</td>
-        <td>${i.tipo === 'pdf' ? '📄 PDF' : '✎ Texto'}</td>
+        <td>${i.tipo === 'pdf' ? '📄 Doc' : '✎ Texto'}</td>
         <td>${escHtml(i.filename || '—')}</td>
         <td>${badgeHtml(i.nivel_geral)}</td>
         <td>${fmtDate(i.criado_em)}</td>
@@ -544,13 +587,13 @@ async function abrirAnalise(id, context = 'dashboard') {
 
     if (context === 'historico') {
       const el = document.getElementById('result-historico');
-      renderResultado(el, syntheticData, `Análise #${id} — ${data.filename || 'texto'}`);
+      renderResultado(el, syntheticData, `Análise #${id} — ${data.filename || 'texto'}`, id);
       el.scrollIntoView({ behavior: 'smooth' });
     } else {
       showSection('historico');
       await carregarHistorico();
       const el = document.getElementById('result-historico');
-      renderResultado(el, syntheticData, `Análise #${id} — ${data.filename || 'texto'}`);
+      renderResultado(el, syntheticData, `Análise #${id} — ${data.filename || 'texto'}`, id);
       el.scrollIntoView({ behavior: 'smooth' });
     }
   } catch (e) {
@@ -584,8 +627,101 @@ document.getElementById('btn-refresh-hist').addEventListener('click', () => {
   carregarHistorico();
 });
 
+// ── Share modal ────────────────────────────────────────────────────────────
+function openShareModal(analiseId) {
+  const modal = document.getElementById('share-modal');
+  const input = document.getElementById('share-link-input');
+  input.value = 'Gerando link…';
+  modal.classList.remove('hidden');
+
+  apiFetch(`/historico/${analiseId}/compartilhar`, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      const url = `${window.location.origin}${window.location.pathname}?share=${data.share_token}`;
+      input.value = url;
+    })
+    .catch(() => { input.value = 'Erro ao gerar link.'; });
+}
+
+document.getElementById('btn-close-share').addEventListener('click', () => {
+  document.getElementById('share-modal').classList.add('hidden');
+});
+
+document.getElementById('share-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('share-modal')) {
+    document.getElementById('share-modal').classList.add('hidden');
+  }
+});
+
+document.getElementById('btn-copy-link').addEventListener('click', () => {
+  const input = document.getElementById('share-link-input');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(input.value)
+      .then(() => showToast('Link copiado!', 'success'))
+      .catch(() => {
+        input.select();
+        document.execCommand('copy');
+        showToast('Link copiado!', 'success');
+      });
+  } else {
+    input.select();
+    document.execCommand('copy');
+    showToast('Link copiado!', 'success');
+  }
+});
+
+// ── Página pública de análise compartilhada ────────────────────────────────
+function showSharedPage() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('menu-toggle').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  const sp = document.getElementById('shared-page');
+  sp.classList.remove('hidden');
+  sp.style.display = 'flex';
+}
+
+async function loadSharedAnalysis(token) {
+  showSharedPage();
+  const loadingEl = document.getElementById('shared-loading');
+  const resultEl  = document.getElementById('result-shared');
+
+  try {
+    const res = await fetch(`${API_BASE}/compartilhada/${token}`);
+    if (!res.ok) throw new Error('Análise não encontrada ou link inválido.');
+    const data = await res.json();
+
+    let achados = [];
+    try { achados = JSON.parse(data.achados); } catch (_) {}
+
+    const syntheticData = {
+      layer1: {
+        possui_injection: data.possui_injection,
+        nivel_geral: data.nivel_geral,
+        resumo: data.resumo,
+        achados,
+        recomendacao: data.recomendacao,
+      },
+      layer2: data.raciocinio_auditoria ? {
+        auditoria_aprovada: true,
+        raciocinio_auditoria: data.raciocinio_auditoria,
+        ajustes: '',
+      } : null,
+    };
+
+    loadingEl.classList.add('hidden');
+    renderResultado(resultEl, syntheticData, data.filename ? `Análise — ${data.filename}` : 'Análise Compartilhada');
+  } catch (e) {
+    loadingEl.innerHTML = `<p style="color:var(--danger);text-align:center;padding:40px 0">${escHtml(e.message)}</p>`;
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
-if (authToken) {
+const shareParam = new URLSearchParams(window.location.search).get('share');
+
+if (shareParam) {
+  loadSharedAnalysis(shareParam);
+} else if (authToken) {
   initApp();
 } else {
   showAuthScreen();

@@ -179,6 +179,14 @@ def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
     return "\n\n".join(partes)
 
 
+def _extrair_texto_docx(conteudo_bytes: bytes) -> str:
+    import docx
+
+    doc = docx.Document(io.BytesIO(conteudo_bytes))
+    partes = [p.text for p in doc.paragraphs if p.text.strip()]
+    return "\n".join(partes)
+
+
 def analisar_pdf(conteudo_bytes: bytes, filename: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:
     try:
         texto = _extrair_texto_pdf(conteudo_bytes)
@@ -190,5 +198,24 @@ def analisar_pdf(conteudo_bytes: bytes, filename: str) -> tuple[ResultadoLayer1,
             422,
             "PDF não contém texto extraível (pode ser digitalizado/imagem). Envie um PDF com texto selecionável.",
         )
+
+    return analisar_completo(texto)
+
+
+def analisar_documento(conteudo_bytes: bytes, filename: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext == "txt":
+        texto = conteudo_bytes.decode("utf-8", errors="replace")
+    elif ext == "docx":
+        try:
+            texto = _extrair_texto_docx(conteudo_bytes)
+        except Exception as exc:
+            raise HTTPException(422, f"Não foi possível ler o arquivo DOCX: {exc}")
+    else:
+        return analisar_pdf(conteudo_bytes, filename)
+
+    if len(texto.strip()) < 10:
+        raise HTTPException(422, "O arquivo não contém texto suficiente para análise.")
 
     return analisar_completo(texto)
