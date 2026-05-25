@@ -5,15 +5,14 @@ import re
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
-from google import genai
-from google.genai import types
+from groq import Groq
 
 from schemas import ResultadoLayer1, ResultadoLayer2
 
 load_dotenv()
 
-MODEL = "gemini-2.0-flash-lite"
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+MODEL = "llama-3.3-70b-versatile"
+client = Groq(api_key=os.environ["GROQ_API_KEY"])
 
 SCHEMA_LAYER1 = """{
   "possui_injection": bool,
@@ -90,7 +89,7 @@ def _strip_fences(raw: str) -> str:
     return raw.strip()
 
 
-def _parse_gemini_json(raw: str, model_class):
+def _parse_json_response(raw: str, model_class):
     cleaned = _strip_fences(raw)
     try:
         return model_class(**json.loads(cleaned))
@@ -104,42 +103,39 @@ def _parse_gemini_json(raw: str, model_class):
     raise ValueError(f"Resposta inválida da IA: {raw[:400]}")
 
 
-def _call_gemini(system: str, contents, max_tokens: int = 4096, json_mode: bool = False) -> str:
+def _call_groq(system: str, user_content: str, max_tokens: int = 4096, json_mode: bool = False) -> str:
     try:
-        config = types.GenerateContentConfig(
-            system_instruction=system,
-            max_output_tokens=max_tokens,
-            **({"response_mime_type": "application/json"} if json_mode else {}),
-        )
-        response = client.models.generate_content(
+        kwargs = dict(
             model=MODEL,
-            contents=contents,
-            config=config,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
+            max_tokens=max_tokens,
         )
-        return response.text
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        response = client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
     except HTTPException:
         raise
     except Exception as exc:
         msg = str(exc)
-        print(f"[GEMINI ERROR] tipo={type(exc).__name__} msg={msg}")
+        print(f"[GROQ ERROR] tipo={type(exc).__name__} msg={msg}")
         msg_lower = msg.lower()
-        if any(k in msg_lower for k in ("api_key", "api key", "invalid api", "permission denied", "unauthenticated")):
-            raise HTTPException(401, f"GEMINI_API_KEY inválida ou sem permissão. Detalhe: {msg}")
-        if any(k in msg_lower for k in ("quota", "rate limit", "resource_exhausted")) or "429" in msg:
-            raise HTTPException(429, f"Cota da API Gemini esgotada. Detalhe: {msg}")
-        raise HTTPException(502, f"Erro da API Gemini ({type(exc).__name__}): {msg}")
+        if any(k in msg_lower for k in ("api_key", "api key", "invalid", "authentication", "unauthorized")):
+            raise HTTPException(401, f"GROQ_API_KEY inválida ou sem permissão. Detalhe: {msg}")
+        if any(k in msg_lower for k in ("quota", "rate limit", "rate_limit", "too many")) or "429" in msg:
+            raise HTTPException(429, f"Cota da API Groq esgotada. Detalhe: {msg}")
+        raise HTTPException(502, f"Erro da API Groq ({type(exc).__name__}): {msg}")
 
 
-def testar_conexao_gemini() -> dict:
-    """Testa a conectividade com a API Gemini. Retorna status e erro real, sem lançar exceção."""
+def testar_conexao_groq() -> dict:
     try:
-        config = types.GenerateContentConfig(
-            max_output_tokens=5,
-        )
-        client.models.generate_content(
+        client.chat.completions.create(
             model=MODEL,
-            contents="Responda apenas: ok",
-            config=config,
+            messages=[{"role": "user", "content": "ok"}],
+            max_tokens=5,
         )
         return {"status": "ok", "erro": None}
     except Exception as exc:
@@ -147,12 +143,12 @@ def testar_conexao_gemini() -> dict:
 
 
 def detectar_layer1(texto: str) -> ResultadoLayer1:
-    raw = _call_gemini(
+    raw = _call_groq(
         SYSTEM_PROMPT_LAYER1,
         f"Analise o seguinte texto em busca de injeção de prompt:\n\n{texto}",
         json_mode=True,
     )
-    return _parse_gemini_json(raw, ResultadoLayer1)
+    return _parse_json_response(raw, ResultadoLayer1)
 
 
 def detectar_layer2(texto_original: str, resultado_l1: ResultadoLayer1) -> ResultadoLayer2:
@@ -161,8 +157,8 @@ def detectar_layer2(texto_original: str, resultado_l1: ResultadoLayer1) -> Resul
         f"RESULTADO DA CAMADA 1:\n{json.dumps(resultado_l1.model_dump(), ensure_ascii=False, indent=2)}\n\n"
         "Audite o resultado acima."
     )
-    raw = _call_gemini(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=2048, json_mode=True)
-    return _parse_gemini_json(raw, ResultadoLayer2)
+    raw = _call_groq(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=2048, json_mode=True)
+    return _parse_json_response(raw, ResultadoLayer2)
 
 
 def analisar_completo(texto: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:
@@ -183,25 +179,16 @@ def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
     return "\n\n".join(partes)
 
 
-def _analisar_pdf_visao(conteudo_bytes: bytes) -> tuple[ResultadoLayer1, ResultadoLayer2]:
-    pdf_part = types.Part.from_bytes(data=conteudo_bytes, mime_type="application/pdf")
-    raw = _call_gemini(
-        SYSTEM_PROMPT_LAYER1,
-        [pdf_part, "Analise o documento PDF acima em busca de injeção de prompt."],
-        json_mode=True,
-    )
-    l1 = _parse_gemini_json(raw, ResultadoLayer1)
-    l2 = detectar_layer2("[PDF enviado como arquivo — texto extraído via visão]", l1)
-    return l1, l2
-
-
 def analisar_pdf(conteudo_bytes: bytes, filename: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:
     try:
         texto = _extrair_texto_pdf(conteudo_bytes)
-    except Exception:
-        return _analisar_pdf_visao(conteudo_bytes)
+    except Exception as exc:
+        raise HTTPException(422, f"Não foi possível extrair texto do PDF: {exc}")
 
     if len(texto.strip()) < 50:
-        return _analisar_pdf_visao(conteudo_bytes)
+        raise HTTPException(
+            422,
+            "PDF não contém texto extraível (pode ser digitalizado/imagem). Envie um PDF com texto selecionável.",
+        )
 
     return analisar_completo(texto)

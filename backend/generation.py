@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 
-from detection import MODEL, _call_gemini, analisar_completo
+from detection import _call_groq, analisar_completo
 from schemas import ResultadoLayer1, ResultadoLayer2
 
 SYSTEM_PROMPT_GERACAO = """Você é um advogado especialista em direito brasileiro com 20 anos de experiência.
@@ -34,7 +34,7 @@ def gerar_peca(tipo_peca: str, fatos: str, pedidos: str, partes: str) -> str:
         f"\nFatos:\n{fatos}"
         f"{pedidos_bloco}"
     )
-    return _call_gemini(SYSTEM_PROMPT_GERACAO, user_msg, max_tokens=8192)
+    return _call_groq(SYSTEM_PROMPT_GERACAO, user_msg, max_tokens=8192)
 
 
 def gerar_e_verificar(
