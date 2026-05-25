@@ -896,6 +896,30 @@ tr:hover td { background: var(--bg-tertiary); }
   .cards-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── Password toggle ─────────────────────────────────────────────────────── */
+.input-senha-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-senha-wrap input {
+  flex: 1;
+  padding-right: 40px;
+}
+.btn-toggle-senha {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  padding: 0;
+  line-height: 1;
+}
+.btn-toggle-senha:hover { opacity: 1; }
+
 /* ── Character counter ────────────────────────────────────────────────────── */
 .char-counter {
   font-size: 12px;

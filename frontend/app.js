@@ -73,7 +73,6 @@ function initApp() {
   document.getElementById('user-name').textContent = name;
   document.getElementById('user-avatar').textContent = name.charAt(0) || '?';
   refreshDashboard();
-  carregarHistorico();
 }
 
 // ── Auth tabs ──────────────────────────────────────────────────────────────
@@ -197,10 +196,21 @@ function showSection(name) {
 
 document.querySelectorAll('.nav-item').forEach(a => {
   a.addEventListener('click', () => {
-    showSection(a.dataset.section);
-    if (a.dataset.section === 'config') loadSettings();
+    const sec = a.dataset.section;
+    showSection(sec);
+    if (sec === 'config')    loadSettings();
+    if (sec === 'historico') carregarHistorico();
+    if (sec === 'pecas')     carregarPecas();
+    if (sec === 'lixeira')   carregarLixeira();
   });
 });
+
+// ── Toggle senha ───────────────────────────────────────────────────────────
+function toggleSenha(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
 
 // ── Risk badge ─────────────────────────────────────────────────────────────
 function badgeHtml(nivel) {
@@ -877,6 +887,133 @@ document.getElementById('form-senha').addEventListener('submit', async e => {
     btn.textContent = 'Alterar senha';
   }
 });
+
+// ── Peças Geradas ──────────────────────────────────────────────────────────
+const TIPO_PECA_LABEL = {
+  peticao: 'Petição Inicial', contestacao: 'Contestação',
+  recurso: 'Recurso', minuta: 'Minuta',
+};
+
+async function carregarPecas() {
+  const tbody = document.getElementById('pecas-table-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando…</td></tr>';
+  try {
+    const res = await apiFetch('/pecas');
+    if (!res.ok) throw new Error('Falha ao carregar');
+    const items = await res.json();
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma peça gerada ainda.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(p => `
+      <tr>
+        <td>#${p.id}</td>
+        <td>${escHtml(TIPO_PECA_LABEL[p.tipo_peca] || p.tipo_peca)}</td>
+        <td>${badgeHtml(p.nivel_risco_detectado)}</td>
+        <td><span style="color:${p.passou_na_detecao ? 'var(--success,#22c55e)' : 'var(--danger)'}">${p.passou_na_detecao ? '✔ Aprovada' : '✖ Suspeita'}</span></td>
+        <td>${fmtDate(p.criado_em)}</td>
+        <td><span class="td-link" onclick="abrirPeca(${p.id})">Ver</span></td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Erro: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function abrirPeca(id) {
+  try {
+    const res = await apiFetch(`/pecas/${id}`);
+    if (!res.ok) throw new Error('Peça não encontrada');
+    const p = await res.json();
+    const resultEl = document.getElementById('result-peca');
+    const tipo = TIPO_PECA_LABEL[p.tipo_peca] || p.tipo_peca;
+    resultEl.innerHTML = `
+      <div class="result-header">
+        <span class="result-title">${escHtml(tipo)} #${p.id}</span>
+        ${badgeHtml(p.nivel_risco_detectado)}
+        <span style="margin-left:8px;font-size:12px;color:${p.passou_na_detecao ? 'var(--success,#22c55e)' : 'var(--danger)'}">
+          ${p.passou_na_detecao ? '✔ Aprovada' : '✖ Suspeita'}
+        </span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">${fmtDate(p.criado_em)}</div>
+      <div class="peca-content" id="peca-hist-texto">${escHtml(p.conteudo_gerado)}</div>
+      <div class="result-actions">
+        <button class="btn btn-ghost" onclick="downloadPecaHist(${p.id})">⬇ Baixar .txt</button>
+        <button class="btn btn-ghost" onclick="exportarPDF()">🖨 Exportar PDF</button>
+      </div>`;
+    resultEl.classList.remove('hidden');
+    resultEl.scrollIntoView({ behavior: 'smooth' });
+  } catch (e) {
+    showToast(`Erro: ${e.message}`);
+  }
+}
+
+function downloadPecaHist(id) {
+  const texto = document.getElementById('peca-hist-texto')?.textContent || '';
+  const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `peca_${id}_lexguard.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+document.getElementById('btn-refresh-pecas').addEventListener('click', carregarPecas);
+
+// ── Lixeira ────────────────────────────────────────────────────────────────
+async function carregarLixeira() {
+  const tbody = document.getElementById('lixeira-table-body');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando…</td></tr>';
+  try {
+    const res = await apiFetch('/lixeira');
+    if (!res.ok) throw new Error('Falha ao carregar');
+    const items = await res.json();
+    if (items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Lixeira vazia.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(i => `
+      <tr>
+        <td>#${i.id}</td>
+        <td>${i.tipo === 'pdf' ? '📄 Doc' : '✎ Texto'}</td>
+        <td>${escHtml(i.filename || '—')}</td>
+        <td>${badgeHtml(i.nivel_geral)}</td>
+        <td>${fmtDate(i.criado_em)}</td>
+        <td>
+          <span class="td-link" style="color:var(--accent)" onclick="restaurarAnalise(${i.id})">Restaurar</span>
+          &nbsp;
+          <span class="td-link" style="color:var(--danger)" onclick="excluirPermanente(${i.id})">Excluir</span>
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Erro: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function restaurarAnalise(id) {
+  try {
+    const res = await apiFetch(`/lixeira/${id}/restaurar`, { method: 'POST' });
+    if (!res.ok) throw new Error('Falha ao restaurar');
+    showToast('Análise restaurada ao histórico.', 'success');
+    carregarLixeira();
+    refreshDashboard();
+  } catch (e) {
+    showToast(`Erro: ${e.message}`);
+  }
+}
+
+async function excluirPermanente(id) {
+  if (!confirm('Excluir permanentemente? Esta ação não pode ser desfeita.')) return;
+  try {
+    const res = await apiFetch(`/lixeira/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Falha ao excluir');
+    showToast('Análise excluída permanentemente.', 'success');
+    carregarLixeira();
+  } catch (e) {
+    showToast(`Erro: ${e.message}`);
+  }
+}
+
+document.getElementById('btn-refresh-lixeira').addEventListener('click', carregarLixeira);
 
 // ── Init ───────────────────────────────────────────────────────────────────
 const shareParam = new URLSearchParams(window.location.search).get('share');

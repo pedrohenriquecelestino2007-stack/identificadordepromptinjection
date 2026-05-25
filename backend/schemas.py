@@ -120,3 +120,18 @@ class PerguntaRequest(BaseModel):
     pergunta: str
     texto: Optional[str] = ""
     contexto_analise: Optional[str] = ""
+
+
+class PecaResumo(BaseModel):
+    id: int
+    tipo_peca: str
+    passou_na_detecao: bool
+    nivel_risco_detectado: str
+    criado_em: datetime.datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PecaDetalhe(PecaResumo):
+    fatos_fornecidos: str
+    conteudo_gerado: str

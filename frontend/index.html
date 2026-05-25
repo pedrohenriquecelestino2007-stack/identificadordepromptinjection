@@ -32,7 +32,10 @@
       </div>
       <div class="form-group">
         <label for="login-password">Senha</label>
-        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required />
+        <div class="input-senha-wrap">
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required />
+          <button type="button" class="btn-toggle-senha" onclick="toggleSenha('login-password')" title="Mostrar senha">👁</button>
+        </div>
       </div>
       <div id="login-error" class="auth-error hidden"></div>
       <button type="submit" class="btn btn-primary btn-full" id="btn-login">Entrar</button>
@@ -49,7 +52,10 @@
       </div>
       <div class="form-group">
         <label for="reg-password">Senha <span class="label-hint">(mín. 6 caracteres)</span></label>
-        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password" required minlength="6" />
+        <div class="input-senha-wrap">
+          <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password" required minlength="6" />
+          <button type="button" class="btn-toggle-senha" onclick="toggleSenha('reg-password')" title="Mostrar senha">👁</button>
+        </div>
       </div>
       <div id="reg-error" class="auth-error hidden"></div>
       <button type="submit" class="btn btn-primary btn-full" id="btn-register">Criar conta</button>
@@ -85,6 +91,12 @@
     </a>
     <a class="nav-item" data-section="historico">
       <span class="nav-icon">☰</span> Histórico
+    </a>
+    <a class="nav-item" data-section="pecas">
+      <span class="nav-icon">📝</span> Peças Geradas
+    </a>
+    <a class="nav-item" data-section="lixeira">
+      <span class="nav-icon">🗑</span> Lixeira
     </a>
     <a class="nav-item" data-section="config">
       <span class="nav-icon">⚙</span> Configurações
@@ -138,9 +150,7 @@
             <th></th>
           </tr>
         </thead>
-        <tbody id="dash-table-body">
-          <tr><td colspan="5" class="empty-state">Carregando…</td></tr>
-        </tbody>
+        <tbody id="dash-table-body"></tbody>
       </table>
     </div>
   </section>
@@ -273,9 +283,7 @@
             <th></th>
           </tr>
         </thead>
-        <tbody id="hist-table-body">
-          <tr><td colspan="6" class="empty-state">Carregando…</td></tr>
-        </tbody>
+        <tbody id="hist-table-body"></tbody>
       </table>
     </div>
 
@@ -322,19 +330,73 @@
     <form id="form-senha" class="settings-form">
       <div class="form-group">
         <label for="senha-atual">Senha atual</label>
-        <input type="password" id="senha-atual" placeholder="••••••••" required />
+        <div class="input-senha-wrap">
+          <input type="password" id="senha-atual" placeholder="••••••••" required />
+          <button type="button" class="btn-toggle-senha" onclick="toggleSenha('senha-atual')" title="Mostrar senha">👁</button>
+        </div>
       </div>
       <div class="form-group">
         <label for="senha-nova">Nova senha <span class="label-hint">(mín. 6 caracteres)</span></label>
-        <input type="password" id="senha-nova" placeholder="••••••••" required minlength="6" />
+        <div class="input-senha-wrap">
+          <input type="password" id="senha-nova" placeholder="••••••••" required minlength="6" />
+          <button type="button" class="btn-toggle-senha" onclick="toggleSenha('senha-nova')" title="Mostrar senha">👁</button>
+        </div>
       </div>
       <div class="form-group">
         <label for="senha-confirma">Confirmar nova senha</label>
-        <input type="password" id="senha-confirma" placeholder="••••••••" required minlength="6" />
+        <div class="input-senha-wrap">
+          <input type="password" id="senha-confirma" placeholder="••••••••" required minlength="6" />
+          <button type="button" class="btn-toggle-senha" onclick="toggleSenha('senha-confirma')" title="Mostrar senha">👁</button>
+        </div>
       </div>
       <div id="senha-error" class="auth-error hidden"></div>
       <button type="submit" class="btn btn-primary" id="btn-senha">Alterar senha</button>
     </form>
+  </section>
+
+  <!-- Peças Geradas -->
+  <section id="section-pecas" class="section">
+    <h2>Peças Geradas</h2>
+    <p class="section-subtitle">Histórico de peças jurídicas geradas pela IA</p>
+    <button class="btn btn-ghost" id="btn-refresh-pecas" style="margin-bottom:16px">↺ Atualizar</button>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tipo</th>
+            <th>Nível de Risco</th>
+            <th>Verificação</th>
+            <th>Data</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="pecas-table-body"></tbody>
+      </table>
+    </div>
+    <div class="result-panel hidden" id="result-peca" style="margin-top:24px"></div>
+  </section>
+
+  <!-- Lixeira -->
+  <section id="section-lixeira" class="section">
+    <h2>Lixeira</h2>
+    <p class="section-subtitle">Análises excluídas — restaure para o histórico ou exclua definitivamente</p>
+    <button class="btn btn-ghost" id="btn-refresh-lixeira" style="margin-bottom:16px">↺ Atualizar</button>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tipo</th>
+            <th>Arquivo</th>
+            <th>Nível</th>
+            <th>Data</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="lixeira-table-body"></tbody>
+      </table>
+    </div>
   </section>
 
 </main>

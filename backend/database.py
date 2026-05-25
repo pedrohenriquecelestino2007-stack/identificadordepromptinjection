@@ -41,6 +41,7 @@ class Analise(Base):
     raciocinio_auditoria = Column(Text, nullable=True)
     recomendacao = Column(Text, nullable=False)
     share_token = Column(String(64), nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False)
     criado_em = Column(DateTime, default=datetime.datetime.utcnow)
 
 
@@ -72,6 +73,9 @@ def migrate_tables():
             ))
             conn.execute(text(
                 "ALTER TABLE pecas_geradas ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL"
+            ))
+            conn.execute(text(
+                "ALTER TABLE analises ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"
             ))
             conn.commit()
     except Exception as e:

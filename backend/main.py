@@ -15,8 +15,10 @@ from generation import gerar_e_verificar
 from schemas import (
     AnaliseDetalhe,
     AnaliseResumo,
+    PecaDetalhe,
     PecaRequest,
     PecaResponse,
+    PecaResumo,
     PerguntaRequest,
     ResultadoCompleto,
     SenhaRequest,
@@ -275,7 +277,7 @@ def listar_historico(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    query = db.query(Analise).filter(Analise.user_id == user.id).order_by(Analise.criado_em.desc())
+    query = db.query(Analise).filter(Analise.user_id == user.id, Analise.is_deleted == False).order_by(Analise.criado_em.desc())
     if nivel_geral:
         query = query.filter(Analise.nivel_geral == nivel_geral.upper())
     return query.limit(limit).all()
@@ -287,7 +289,7 @@ def obter_analise(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id).first()
+    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id, Analise.is_deleted == False).first()
     if not registro:
         raise HTTPException(404, "Análise não encontrada.")
     return registro
@@ -299,12 +301,72 @@ def deletar_analise(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id).first()
+    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id, Analise.is_deleted == False).first()
     if not registro:
         raise HTTPException(404, "Análise não encontrada.")
+    registro.is_deleted = True
+    db.commit()
+    return {"ok": True}
+
+
+# ── Lixeira ───────────────────────────────────────────────────────────────────
+
+@app.get("/lixeira", response_model=list[AnaliseResumo])
+def listar_lixeira(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return db.query(Analise).filter(Analise.user_id == user.id, Analise.is_deleted == True).order_by(Analise.criado_em.desc()).all()
+
+
+@app.post("/lixeira/{analise_id}/restaurar")
+def restaurar_analise(
+    analise_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id, Analise.is_deleted == True).first()
+    if not registro:
+        raise HTTPException(404, "Análise não encontrada na lixeira.")
+    registro.is_deleted = False
+    db.commit()
+    return {"ok": True}
+
+
+@app.delete("/lixeira/{analise_id}")
+def excluir_permanente(
+    analise_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id, Analise.is_deleted == True).first()
+    if not registro:
+        raise HTTPException(404, "Análise não encontrada na lixeira.")
     db.delete(registro)
     db.commit()
     return {"ok": True}
+
+
+# ── Peças Geradas ─────────────────────────────────────────────────────────────
+
+@app.get("/pecas", response_model=list[PecaResumo])
+def listar_pecas(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return db.query(PecaGerada).filter(PecaGerada.user_id == user.id).order_by(PecaGerada.criado_em.desc()).limit(100).all()
+
+
+@app.get("/pecas/{peca_id}", response_model=PecaDetalhe)
+def obter_peca(
+    peca_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    peca = db.query(PecaGerada).filter(PecaGerada.id == peca_id, PecaGerada.user_id == user.id).first()
+    if not peca:
+        raise HTTPException(404, "Peça não encontrada.")
+    return peca
 
 
 @app.post("/historico/{analise_id}/compartilhar")
