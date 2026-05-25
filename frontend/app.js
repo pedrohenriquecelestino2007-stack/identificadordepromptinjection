@@ -1,6 +1,148 @@
 'use strict';
 
-const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://identificadordepromptinjection.onrender.com';
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : 'https://identificadordepromptinjection.onrender.com';
+
+// ── Auth state ─────────────────────────────────────────────────────────────
+let authToken = localStorage.getItem('lg_token') || null;
+let authUser  = JSON.parse(localStorage.getItem('lg_user') || 'null');
+
+function saveAuth(token, user) {
+  authToken = token;
+  authUser  = user;
+  localStorage.setItem('lg_token', token);
+  localStorage.setItem('lg_user', JSON.stringify(user));
+}
+
+function clearAuth() {
+  authToken = null;
+  authUser  = null;
+  localStorage.removeItem('lg_token');
+  localStorage.removeItem('lg_user');
+}
+
+function authHeaders() {
+  return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: {
+      ...authHeaders(),
+      ...(opts.headers || {}),
+    },
+  });
+  if (res.status === 401) {
+    clearAuth();
+    showAuthScreen();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+  return res;
+}
+
+// ── Auth screen ────────────────────────────────────────────────────────────
+const authScreen = document.getElementById('auth-screen');
+
+function showAuthScreen() {
+  authScreen.classList.remove('hidden');
+}
+
+function hideAuthScreen() {
+  authScreen.classList.add('hidden');
+}
+
+function initApp() {
+  hideAuthScreen();
+  const name = authUser?.name || '';
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-avatar').textContent = name.charAt(0) || '?';
+  refreshDashboard();
+  carregarHistorico();
+}
+
+// ── Auth tabs ──────────────────────────────────────────────────────────────
+document.querySelectorAll('.auth-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const which = tab.dataset.tab;
+    document.getElementById('form-login').classList.toggle('hidden', which !== 'login');
+    document.getElementById('form-register').classList.toggle('hidden', which !== 'register');
+    document.getElementById('login-error').classList.add('hidden');
+    document.getElementById('reg-error').classList.add('hidden');
+  });
+});
+
+// ── Login form ─────────────────────────────────────────────────────────────
+document.getElementById('form-login').addEventListener('submit', async e => {
+  e.preventDefault();
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('btn-login');
+
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao entrar.');
+    saveAuth(data.access_token, { id: data.user_id, name: data.name });
+    initApp();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+
+// ── Register form ──────────────────────────────────────────────────────────
+document.getElementById('form-register').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name     = document.getElementById('reg-name').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const errEl    = document.getElementById('reg-error');
+  const btn      = document.getElementById('btn-register');
+
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btn.textContent = 'Criando conta…';
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erro ao criar conta.');
+    saveAuth(data.access_token, { id: data.user_id, name: data.name });
+    initApp();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Criar conta';
+  }
+});
+
+// ── Logout ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-logout').addEventListener('click', () => {
+  clearAuth();
+  showAuthScreen();
+});
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 let toastTimer = null;
@@ -12,7 +154,7 @@ function showToast(msg, type = 'error') {
   toastTimer = setTimeout(() => { el.className = ''; }, 4000);
 }
 
-// ── Mobile sidebar ──────────────────────────────────────────────────────────
+// ── Mobile sidebar ─────────────────────────────────────────────────────────
 const sidebar = document.getElementById('sidebar');
 const overlay = document.getElementById('sidebar-overlay');
 const menuBtn = document.getElementById('menu-toggle');
@@ -43,19 +185,29 @@ document.querySelectorAll('.nav-item').forEach(a => {
   a.addEventListener('click', () => showSection(a.dataset.section));
 });
 
-// ── Risk badge ──────────────────────────────────────────────────────────────
+// ── Risk badge ─────────────────────────────────────────────────────────────
 function badgeHtml(nivel) {
   return `<span class="badge badge-${nivel}">${nivel}</span>`;
 }
 
-// ── Date formatter ──────────────────────────────────────────────────────────
+// ── Date formatter ─────────────────────────────────────────────────────────
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-// ── Result renderer ─────────────────────────────────────────────────────────
+// ── HTML escape ────────────────────────────────────────────────────────────
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── Result renderer ────────────────────────────────────────────────────────
 function renderResultado(container, data, title = 'Resultado da Análise') {
   const l1 = data.layer1 || data;
   const l2 = data.layer2 || null;
@@ -80,7 +232,7 @@ function renderResultado(container, data, title = 'Resultado da Análise') {
         ${l2.auditoria_aprovada ? '✔ Análise validada' : '✖ Análise possivelmente comprometida'}
       </div>
       <div class="auditoria-text">${escHtml(l2.raciocinio_auditoria)}</div>
-      ${l2.ajustes ? `<div class="auditoria-text" style="margin-top:8px;color:var(--warning)">Ajustes recomendados: ${escHtml(l2.ajustes)}</div>` : ''}
+      ${l2.ajustes ? `<div class="auditoria-text" style="margin-top:8px;color:var(--warning)">Ajustes: ${escHtml(l2.ajustes)}</div>` : ''}
     </div>` : '';
 
   container.innerHTML = `
@@ -99,16 +251,7 @@ function renderResultado(container, data, title = 'Resultado da Análise') {
   container.classList.remove('hidden');
 }
 
-function escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-// ── Loading helpers ─────────────────────────────────────────────────────────
+// ── Loading helpers ────────────────────────────────────────────────────────
 function setLoading(loadingId, btnEl, on) {
   const el = document.getElementById(loadingId);
   if (on) {
@@ -120,18 +263,18 @@ function setLoading(loadingId, btnEl, on) {
   }
 }
 
-// ── Analisar Texto ──────────────────────────────────────────────────────────
+// ── Analisar Texto ─────────────────────────────────────────────────────────
 document.getElementById('btn-analisar-texto').addEventListener('click', async () => {
   const texto = document.getElementById('input-texto').value.trim();
   if (!texto) { showToast('Digite ou cole um texto para analisar.'); return; }
 
-  const btn = document.getElementById('btn-analisar-texto');
+  const btn    = document.getElementById('btn-analisar-texto');
   const resultEl = document.getElementById('result-texto');
   resultEl.classList.add('hidden');
   setLoading('loading-texto', btn, true);
 
   try {
-    const res = await fetch(`${API_BASE}/analisar/texto`, {
+    const res = await apiFetch('/analisar/texto', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ texto }),
@@ -150,13 +293,13 @@ document.getElementById('btn-analisar-texto').addEventListener('click', async ()
   }
 });
 
-// ── Analisar PDF ────────────────────────────────────────────────────────────
+// ── Analisar PDF ───────────────────────────────────────────────────────────
 let selectedPdfFile = null;
 
-const dropZone = document.getElementById('drop-zone');
-const pdfInput = document.getElementById('pdf-input');
+const dropZone   = document.getElementById('drop-zone');
+const pdfInput   = document.getElementById('pdf-input');
 const pdfFilename = document.getElementById('pdf-filename');
-const btnPdf = document.getElementById('btn-analisar-pdf');
+const btnPdf     = document.getElementById('btn-analisar-pdf');
 
 dropZone.addEventListener('click', () => pdfInput.click());
 
@@ -196,7 +339,7 @@ document.getElementById('btn-analisar-pdf').addEventListener('click', async () =
   try {
     const form = new FormData();
     form.append('file', selectedPdfFile);
-    const res = await fetch(`${API_BASE}/analisar/pdf`, { method: 'POST', body: form });
+    const res = await apiFetch('/analisar/pdf', { method: 'POST', body: form });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || 'Erro desconhecido');
@@ -211,22 +354,22 @@ document.getElementById('btn-analisar-pdf').addEventListener('click', async () =
   }
 });
 
-// ── Gerar Peça ──────────────────────────────────────────────────────────────
+// ── Gerar Peça ─────────────────────────────────────────────────────────────
 document.getElementById('btn-gerar').addEventListener('click', async () => {
   const tipo_peca = document.getElementById('gerar-tipo').value;
-  const fatos = document.getElementById('gerar-fatos').value.trim();
-  const pedidos = document.getElementById('gerar-pedidos').value.trim();
-  const partes = document.getElementById('gerar-partes').value.trim();
+  const fatos     = document.getElementById('gerar-fatos').value.trim();
+  const pedidos   = document.getElementById('gerar-pedidos').value.trim();
+  const partes    = document.getElementById('gerar-partes').value.trim();
 
   if (!fatos) { showToast('O campo Fatos é obrigatório.'); return; }
 
-  const btn = document.getElementById('btn-gerar');
+  const btn      = document.getElementById('btn-gerar');
   const resultEl = document.getElementById('result-gerar');
   resultEl.classList.add('hidden');
   setLoading('loading-gerar', btn, true);
 
   try {
-    const res = await fetch(`${API_BASE}/gerar/peca`, {
+    const res = await apiFetch('/gerar/peca', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tipo_peca, fatos, pedidos, partes }),
@@ -245,9 +388,9 @@ document.getElementById('btn-gerar').addEventListener('click', async () => {
 });
 
 function renderPecaResult(container, data) {
-  const statusIcon = data.passou_na_detecao ? '✔' : '✖';
+  const statusIcon  = data.passou_na_detecao ? '✔' : '✖';
   const statusClass = data.passou_na_detecao ? 'auditoria-ok' : 'auditoria-fail';
-  const statusText = data.passou_na_detecao ? 'Peça aprovada na verificação de segurança' : 'Atenção: peça contém padrões suspeitos';
+  const statusText  = data.passou_na_detecao ? 'Peça aprovada na verificação de segurança' : 'Atenção: peça contém padrões suspeitos';
 
   container.innerHTML = `
     <div class="result-header">
@@ -279,27 +422,27 @@ function renderPecaResult(container, data) {
 
 function downloadPeca() {
   const texto = document.getElementById('peca-texto')?.textContent || '';
-  const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'peca_lexguard.txt';
+  const blob  = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+  const a     = document.createElement('a');
+  a.href      = URL.createObjectURL(blob);
+  a.download  = 'peca_lexguard.txt';
   a.click();
   URL.revokeObjectURL(a.href);
 }
 
-// ── Dashboard ───────────────────────────────────────────────────────────────
+// ── Dashboard ──────────────────────────────────────────────────────────────
 async function refreshDashboard() {
   try {
-    const res = await fetch(`${API_BASE}/historico?limit=200`);
+    const res = await apiFetch('/historico?limit=200');
     if (!res.ok) return;
     const items = await res.json();
 
-    document.getElementById('dash-total').textContent = items.length;
+    document.getElementById('dash-total').textContent   = items.length;
     document.getElementById('dash-critico').textContent = items.filter(i => i.nivel_geral === 'CRITICO').length;
-    document.getElementById('dash-alto').textContent = items.filter(i => i.nivel_geral === 'ALTO').length;
-    document.getElementById('dash-ultima').textContent = items.length ? fmtDate(items[0].criado_em) : '—';
+    document.getElementById('dash-alto').textContent    = items.filter(i => i.nivel_geral === 'ALTO').length;
+    document.getElementById('dash-ultima').textContent  = items.length ? fmtDate(items[0].criado_em) : '—';
 
-    const tbody = document.getElementById('dash-table-body');
+    const tbody  = document.getElementById('dash-table-body');
     const recent = items.slice(0, 10);
     if (recent.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma análise ainda.</td></tr>';
@@ -308,8 +451,7 @@ async function refreshDashboard() {
     tbody.innerHTML = recent.map(i => `
       <tr>
         <td>#${i.id}</td>
-        <td>${i.tipo === 'pdf' ? '📄 PDF' : '✎ Texto'}</td>
-        <td>${escHtml(i.filename || '—')}</td>
+        <td>${i.tipo === 'pdf' ? '📄 PDF' : '✎ Texto'} ${escHtml(i.filename || '')}</td>
         <td>${badgeHtml(i.nivel_geral)}</td>
         <td>${fmtDate(i.criado_em)}</td>
         <td><span class="td-link" onclick="abrirAnalise(${i.id})">Ver</span></td>
@@ -317,13 +459,13 @@ async function refreshDashboard() {
   } catch (_) {}
 }
 
-// ── Histórico ───────────────────────────────────────────────────────────────
+// ── Histórico ──────────────────────────────────────────────────────────────
 async function carregarHistorico(nivel = '') {
   const tbody = document.getElementById('hist-table-body');
   tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando…</td></tr>';
   try {
-    const qs = nivel ? `?nivel_geral=${nivel}&limit=200` : '?limit=200';
-    const res = await fetch(`${API_BASE}/historico${qs}`);
+    const qs  = nivel ? `?nivel_geral=${nivel}&limit=200` : '?limit=200';
+    const res = await apiFetch(`/historico${qs}`);
     if (!res.ok) throw new Error('Falha ao carregar');
     const items = await res.json();
 
@@ -338,7 +480,11 @@ async function carregarHistorico(nivel = '') {
         <td>${escHtml(i.filename || '—')}</td>
         <td>${badgeHtml(i.nivel_geral)}</td>
         <td>${fmtDate(i.criado_em)}</td>
-        <td><span class="td-link" onclick="abrirAnalise(${i.id}, 'historico')">Abrir</span></td>
+        <td>
+          <span class="td-link" onclick="abrirAnalise(${i.id}, 'historico')">Abrir</span>
+          &nbsp;
+          <span class="td-link" style="color:var(--danger)" onclick="deletarAnalise(${i.id})">Excluir</span>
+        </td>
       </tr>`).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Erro: ${escHtml(e.message)}</td></tr>`;
@@ -347,7 +493,7 @@ async function carregarHistorico(nivel = '') {
 
 async function abrirAnalise(id, context = 'dashboard') {
   try {
-    const res = await fetch(`${API_BASE}/historico/${id}`);
+    const res = await apiFetch(`/historico/${id}`);
     if (!res.ok) throw new Error('Análise não encontrada');
     const data = await res.json();
 
@@ -359,7 +505,7 @@ async function abrirAnalise(id, context = 'dashboard') {
         possui_injection: data.possui_injection,
         nivel_geral: data.nivel_geral,
         resumo: data.resumo,
-        achados: achados,
+        achados,
         recomendacao: data.recomendacao,
       },
       layer2: data.raciocinio_auditoria ? {
@@ -385,6 +531,20 @@ async function abrirAnalise(id, context = 'dashboard') {
   }
 }
 
+async function deletarAnalise(id) {
+  if (!confirm('Excluir esta análise? Esta ação não pode ser desfeita.')) return;
+  try {
+    const res = await apiFetch(`/historico/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Falha ao excluir');
+    showToast('Análise excluída.', 'success');
+    carregarHistorico();
+    refreshDashboard();
+    document.getElementById('result-historico').classList.add('hidden');
+  } catch (e) {
+    showToast(`Erro: ${e.message}`);
+  }
+}
+
 document.getElementById('btn-filtrar').addEventListener('click', () => {
   const nivel = document.getElementById('filtro-nivel').value;
   document.getElementById('result-historico').classList.add('hidden');
@@ -397,8 +557,9 @@ document.getElementById('btn-refresh-hist').addEventListener('click', () => {
   carregarHistorico();
 });
 
-// ── Init ────────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  refreshDashboard();
-  carregarHistorico();
-});
+// ── Init ───────────────────────────────────────────────────────────────────
+if (authToken) {
+  initApp();
+} else {
+  showAuthScreen();
+}

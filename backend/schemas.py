@@ -55,6 +55,7 @@ class AnaliseResumo(BaseModel):
     tipo: str
     possui_injection: bool
     nivel_geral: str
+    share_token: Optional[str] = None
     criado_em: datetime.datetime
 
     model_config = {"from_attributes": True}
@@ -73,3 +74,31 @@ class PecaResponse(BaseModel):
     analise_injection: ResultadoLayer1
     passou_na_detecao: bool
     id_salvo: int
+
+
+# Auth schemas
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    name: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+
+    model_config = {"from_attributes": True}

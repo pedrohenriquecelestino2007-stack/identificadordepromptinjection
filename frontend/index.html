@@ -4,15 +4,64 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LexGuard — Detecção de Prompt Injection Jurídica</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 
-<!-- ── Menu mobile ───────────────────────────────────────────────────── -->
+<!-- ── Tela de autenticação ──────────────────────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">⚖</div>
+      <h1>LexGuard</h1>
+      <p>Segurança Jurídica com Inteligência Artificial</p>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" data-tab="login">Entrar</button>
+      <button class="auth-tab" data-tab="register">Criar conta</button>
+    </div>
+
+    <form id="form-login" class="auth-form">
+      <div class="form-group">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Senha</label>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <div id="login-error" class="auth-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="btn-login">Entrar</button>
+    </form>
+
+    <form id="form-register" class="auth-form hidden">
+      <div class="form-group">
+        <label for="reg-name">Nome completo</label>
+        <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name" required />
+      </div>
+      <div class="form-group">
+        <label for="reg-email">E-mail</label>
+        <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label for="reg-password">Senha <span class="label-hint">(mín. 6 caracteres)</span></label>
+        <input type="password" id="reg-password" placeholder="••••••••" autocomplete="new-password" required minlength="6" />
+      </div>
+      <div id="reg-error" class="auth-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="btn-register">Criar conta</button>
+    </form>
+  </div>
+</div>
+
+<!-- ── Menu mobile ───────────────────────────────────────────────────────── -->
 <button id="menu-toggle" aria-label="Abrir menu">&#9776;</button>
 <div id="sidebar-overlay"></div>
 
-<!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+<!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
 <aside id="sidebar">
   <div class="sidebar-logo">
     <h1>⚖ LexGuard</h1>
@@ -35,15 +84,22 @@
       <span class="nav-icon">☰</span> Histórico
     </a>
   </nav>
+  <div class="sidebar-user">
+    <div class="sidebar-user-info">
+      <div class="sidebar-user-avatar" id="user-avatar">—</div>
+      <div class="sidebar-user-name" id="user-name">—</div>
+    </div>
+    <button class="btn-logout" id="btn-logout" title="Sair">⏻</button>
+  </div>
 </aside>
 
-<!-- ── Main ─────────────────────────────────────────────────────────── -->
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
 <main id="main">
 
   <!-- Dashboard -->
   <section id="section-dashboard" class="section active">
     <h2>Dashboard</h2>
-    <p class="section-subtitle">Visão geral das análises realizadas</p>
+    <p class="section-subtitle">Visão geral das suas análises realizadas</p>
 
     <div class="cards-grid">
       <div class="card">
@@ -168,7 +224,7 @@
   <!-- Histórico -->
   <section id="section-historico" class="section">
     <h2>Histórico de Análises</h2>
-    <p class="section-subtitle">Todas as análises realizadas — clique em uma linha para ver detalhes</p>
+    <p class="section-subtitle">Suas análises realizadas — clique em uma linha para ver detalhes</p>
 
     <div class="filters">
       <div class="form-group">
@@ -204,7 +260,6 @@
       </table>
     </div>
 
-    <!-- Detail panel inside historico -->
     <div class="result-panel hidden" id="result-historico" style="margin-top:24px"></div>
   </section>
 
