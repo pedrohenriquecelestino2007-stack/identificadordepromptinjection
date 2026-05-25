@@ -222,12 +222,21 @@ function escHtml(str) {
 }
 
 // ── Result renderer ────────────────────────────────────────────────────────
+const NIVEL_INFO = {
+  CRITICO: { icon: '🚨', label: 'Risco Crítico', desc: 'Injeção de prompt detectada — ação imediata necessária' },
+  ALTO:    { icon: '⚠️', label: 'Risco Alto',    desc: 'Tentativa clara de manipulação detectada' },
+  MEDIO:   { icon: '⚡', label: 'Risco Médio',   desc: 'Padrões suspeitos identificados' },
+  BAIXO:   { icon: '🔍', label: 'Risco Baixo',   desc: 'Indicadores leves — pode ser coincidência' },
+  NENHUM:  { icon: '✅', label: 'Sem Ameaças',   desc: 'Nenhuma injeção de prompt detectada' },
+};
+
 function renderResultado(container, data, title = 'Resultado da Análise') {
-  const l1 = data.layer1 || data;
-  const l2 = data.layer2 || null;
+  const l1   = data.layer1 || data;
+  const l2   = data.layer2 || null;
+  const info = NIVEL_INFO[l1.nivel_geral] || NIVEL_INFO.NENHUM;
 
   const achadosHtml = (l1.achados || []).length === 0
-    ? '<p style="color:var(--text-muted);font-size:13px">Nenhum achado suspeito.</p>'
+    ? '<p style="color:var(--text-muted);font-size:13px;padding:8px 0">Nenhum achado suspeito encontrado.</p>'
     : (l1.achados || []).map(a => `
         <div class="achado-item">
           <div class="achado-header">
@@ -250,9 +259,13 @@ function renderResultado(container, data, title = 'Resultado da Análise') {
     </div>` : '';
 
   container.innerHTML = `
-    <div class="result-header">
-      <span class="result-title">${escHtml(title)}</span>
-      ${badgeHtml(l1.nivel_geral)}
+    <div class="risk-banner risk-banner-${l1.nivel_geral}">
+      <div class="risk-banner-icon">${info.icon}</div>
+      <div class="risk-banner-content">
+        <div class="risk-banner-title">${escHtml(title)}</div>
+        <div class="risk-banner-level">${info.label}</div>
+        <div class="risk-banner-desc">${info.desc}</div>
+      </div>
     </div>
     <div class="result-summary">${escHtml(l1.resumo)}</div>
     ${(l1.achados || []).length > 0 ? `<div class="achados-title">Achados (${l1.achados.length})</div>` : ''}
