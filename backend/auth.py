@@ -2,10 +2,10 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
+import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from database import User, get_db
@@ -14,16 +14,15 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "lexguard-insecure-dev-secret-change-i
 ALGORITHM = "HS256"
 TOKEN_DAYS = 30
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def create_token(user_id: int) -> str:

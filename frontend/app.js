@@ -93,7 +93,7 @@ document.getElementById('form-login').addEventListener('submit', async e => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ detail: `Erro ${res.status} no servidor.` }));
     if (!res.ok) throw new Error(data.detail || 'Erro ao entrar.');
     saveAuth(data.access_token, { id: data.user_id, name: data.name });
     initApp();
@@ -125,7 +125,7 @@ document.getElementById('form-register').addEventListener('submit', async e => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ detail: `Erro ${res.status} no servidor.` }));
     if (!res.ok) throw new Error(data.detail || 'Erro ao criar conta.');
     saveAuth(data.access_token, { id: data.user_id, name: data.name });
     initApp();
