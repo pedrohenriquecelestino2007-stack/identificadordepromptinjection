@@ -196,7 +196,10 @@ function showSection(name) {
 }
 
 document.querySelectorAll('.nav-item').forEach(a => {
-  a.addEventListener('click', () => showSection(a.dataset.section));
+  a.addEventListener('click', () => {
+    showSection(a.dataset.section);
+    if (a.dataset.section === 'config') loadSettings();
+  });
 });
 
 // ── Risk badge ─────────────────────────────────────────────────────────────
@@ -230,14 +233,17 @@ const NIVEL_INFO = {
   NENHUM:  { icon: '✅', label: 'Sem Ameaças',   desc: 'Nenhuma injeção de prompt detectada' },
 };
 
-function renderResultado(container, data, title = 'Resultado da Análise', analiseId = null) {
+function renderResultado(container, data, title = 'Resultado da Análise', analiseId = null, textoOriginal = '') {
   const l1   = data.layer1 || data;
   const l2   = data.layer2 || null;
   const info = NIVEL_INFO[l1.nivel_geral] || NIVEL_INFO.NENHUM;
 
   const achadosHtml = (l1.achados || []).length === 0
     ? '<p style="color:var(--text-muted);font-size:13px;padding:8px 0">Nenhum achado suspeito encontrado.</p>'
-    : (l1.achados || []).map(a => `
+    : (l1.achados || []).map(a => {
+        const conf = typeof a.confianca === 'number' ? a.confianca : 80;
+        const confClass = conf >= 70 ? 'confianca-high' : conf >= 50 ? 'confianca-mid' : 'confianca-low';
+        return `
         <div class="achado-item">
           <div class="achado-header">
             ${badgeHtml(a.nivel_risco)}
@@ -246,7 +252,14 @@ function renderResultado(container, data, title = 'Resultado da Análise', anali
           </div>
           <div class="achado-trecho">"${escHtml(a.trecho)}"</div>
           <div class="achado-descricao">${escHtml(a.descricao)}</div>
-        </div>`).join('');
+          <div class="confianca-wrap">
+            <span class="confianca-label">Confiança: ${conf}%</span>
+            <div class="confianca-bar-bg">
+              <div class="confianca-bar-fill ${confClass}" style="width:${conf}%"></div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
 
   const layer2Html = l2 ? `
     <div class="auditoria-box">
@@ -256,6 +269,13 @@ function renderResultado(container, data, title = 'Resultado da Análise', anali
       </div>
       <div class="auditoria-text">${escHtml(l2.raciocinio_auditoria)}</div>
       ${l2.ajustes ? `<div class="auditoria-text" style="margin-top:8px;color:var(--warning)">Ajustes: ${escHtml(l2.ajustes)}</div>` : ''}
+    </div>` : '';
+
+  const sugestoes = l1.sugestoes_correcao || [];
+  const sugestoesHtml = sugestoes.length > 0 ? `
+    <div class="sugestoes-box">
+      <h4>Sugestões de Correção</h4>
+      <ul>${sugestoes.map(s => `<li>${escHtml(s)}</li>`).join('')}</ul>
     </div>` : '';
 
   const shareBtn = analiseId
@@ -279,11 +299,70 @@ function renderResultado(container, data, title = 'Resultado da Análise', anali
       <h4>Recomendação</h4>
       <p>${escHtml(l1.recomendacao)}</p>
     </div>
+    ${sugestoesHtml}
     <div class="result-actions">
       ${shareBtn}
       <button class="btn btn-ghost" onclick="exportarPDF()">🖨 Exportar PDF</button>
+    </div>
+    <div class="chat-section" id="chat-${container.id}">
+      <div class="chat-header"><h4>💬 Perguntar à IA sobre este documento</h4></div>
+      <div class="chat-messages" id="chat-${container.id}-msgs">
+        <p class="chat-empty">Faça uma pergunta sobre o conteúdo ou os achados desta análise.</p>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" class="chat-input" id="chat-${container.id}-input"
+          placeholder="Ex: O que está oculto neste arquivo? Por que esse trecho é suspeito?" />
+        <button class="btn btn-primary chat-send" id="chat-${container.id}-btn">Perguntar</button>
+      </div>
     </div>`;
   container.classList.remove('hidden');
+  setupChatPanel(container.id, analiseId, textoOriginal, JSON.stringify(l1));
+}
+
+// ── Chat panel ─────────────────────────────────────────────────────────────
+function setupChatPanel(containerId, analiseId, textoOriginal, analiseJson) {
+  const input = document.getElementById(`chat-${containerId}-input`);
+  const btn   = document.getElementById(`chat-${containerId}-btn`);
+  if (!input || !btn) return;
+
+  async function enviarPergunta() {
+    const pergunta = input.value.trim();
+    if (!pergunta) return;
+    input.value = '';
+    btn.disabled = true;
+
+    const msgsEl = document.getElementById(`chat-${containerId}-msgs`);
+    const empty  = msgsEl.querySelector('.chat-empty');
+    if (empty) empty.remove();
+
+    msgsEl.innerHTML += `<div class="chat-msg user"><div class="chat-bubble user-bubble">${escHtml(pergunta)}</div></div>`;
+
+    const loadId = `cl-${Date.now()}`;
+    msgsEl.innerHTML += `<div class="chat-msg ai" id="${loadId}"><div class="chat-bubble ai-bubble"><span class="spinner" style="width:14px;height:14px;border-width:2px;margin:2px 0"></span></div></div>`;
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    try {
+      const endpoint = analiseId ? `/perguntar/analise/${analiseId}` : '/perguntar';
+      const res = await apiFetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pergunta, texto: textoOriginal, contexto_analise: analiseJson }),
+      });
+      const data = await res.json().catch(() => ({ resposta: `Erro ${res.status}` }));
+      document.getElementById(loadId)?.remove();
+      const resposta = data.resposta || data.detail || 'Sem resposta.';
+      msgsEl.innerHTML += `<div class="chat-msg ai"><div class="chat-bubble ai-bubble">${escHtml(resposta).replace(/\n/g, '<br>')}</div></div>`;
+    } catch (err) {
+      document.getElementById(loadId)?.remove();
+      msgsEl.innerHTML += `<div class="chat-msg ai"><div class="chat-bubble ai-bubble error-bubble">${escHtml(err.message)}</div></div>`;
+    } finally {
+      btn.disabled = false;
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+  }
+
+  btn.addEventListener('click', enviarPergunta);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') enviarPergunta(); });
 }
 
 // ── Export / Print ─────────────────────────────────────────────────────────
@@ -302,6 +381,19 @@ function setLoading(loadingId, btnEl, on) {
     if (btnEl) btnEl.disabled = false;
   }
 }
+
+// ── Character counter ──────────────────────────────────────────────────────
+const inputTexto   = document.getElementById('input-texto');
+const charCountEl  = document.getElementById('char-counter');
+
+function updateCharCounter() {
+  const val   = inputTexto.value;
+  const chars = val.length;
+  const words = val.trim() ? val.trim().split(/\s+/).length : 0;
+  charCountEl.textContent = `${chars.toLocaleString('pt-BR')} caracteres · ${words.toLocaleString('pt-BR')} palavras`;
+  charCountEl.classList.toggle('warn', chars > 20000);
+}
+inputTexto.addEventListener('input', updateCharCounter);
 
 // ── Analisar Texto ─────────────────────────────────────────────────────────
 document.getElementById('btn-analisar-texto').addEventListener('click', async () => {
@@ -324,7 +416,7 @@ document.getElementById('btn-analisar-texto').addEventListener('click', async ()
       throw new Error(err.detail || 'Erro desconhecido');
     }
     const data = await res.json();
-    renderResultado(resultEl, data, 'Análise de Texto', data.id_salvo || null);
+    renderResultado(resultEl, data, 'Análise de Texto', data.id_salvo || null, texto);
     refreshDashboard();
   } catch (e) {
     showToast(`Erro: ${e.message}`);
@@ -530,6 +622,8 @@ async function refreshDashboard() {
 }
 
 // ── Histórico ──────────────────────────────────────────────────────────────
+let _historicoItems = [];
+
 async function carregarHistorico(nivel = '') {
   const tbody = document.getElementById('hist-table-body');
   tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando…</td></tr>';
@@ -537,28 +631,32 @@ async function carregarHistorico(nivel = '') {
     const qs  = nivel ? `?nivel_geral=${nivel}&limit=200` : '?limit=200';
     const res = await apiFetch(`/historico${qs}`);
     if (!res.ok) throw new Error('Falha ao carregar');
-    const items = await res.json();
-
-    if (items.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma análise encontrada.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = items.map(i => `
-      <tr>
-        <td>#${i.id}</td>
-        <td>${i.tipo === 'pdf' ? '📄 Doc' : '✎ Texto'}</td>
-        <td>${escHtml(i.filename || '—')}</td>
-        <td>${badgeHtml(i.nivel_geral)}</td>
-        <td>${fmtDate(i.criado_em)}</td>
-        <td>
-          <span class="td-link" onclick="abrirAnalise(${i.id}, 'historico')">Abrir</span>
-          &nbsp;
-          <span class="td-link" style="color:var(--danger)" onclick="deletarAnalise(${i.id})">Excluir</span>
-        </td>
-      </tr>`).join('');
+    _historicoItems = await res.json();
+    renderHistoricoTabela(_historicoItems);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Erro: ${escHtml(e.message)}</td></tr>`;
   }
+}
+
+function renderHistoricoTabela(items) {
+  const tbody = document.getElementById('hist-table-body');
+  if (items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma análise encontrada.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(i => `
+    <tr>
+      <td>#${i.id}</td>
+      <td>${i.tipo === 'pdf' ? '📄 Doc' : '✎ Texto'}</td>
+      <td>${escHtml(i.filename || '—')}</td>
+      <td>${badgeHtml(i.nivel_geral)}</td>
+      <td>${fmtDate(i.criado_em)}</td>
+      <td>
+        <span class="td-link" onclick="abrirAnalise(${i.id}, 'historico')">Abrir</span>
+        &nbsp;
+        <span class="td-link" style="color:var(--danger)" onclick="deletarAnalise(${i.id})">Excluir</span>
+      </td>
+    </tr>`).join('');
 }
 
 async function abrirAnalise(id, context = 'dashboard') {
@@ -615,14 +713,24 @@ async function deletarAnalise(id) {
   }
 }
 
+document.getElementById('filtro-busca').addEventListener('input', () => {
+  const busca = document.getElementById('filtro-busca').value.toLowerCase();
+  const filtered = _historicoItems.filter(i =>
+    !busca || (i.filename || '').toLowerCase().includes(busca)
+  );
+  renderHistoricoTabela(filtered);
+});
+
 document.getElementById('btn-filtrar').addEventListener('click', () => {
   const nivel = document.getElementById('filtro-nivel').value;
+  document.getElementById('filtro-busca').value = '';
   document.getElementById('result-historico').classList.add('hidden');
   carregarHistorico(nivel);
 });
 
 document.getElementById('btn-refresh-hist').addEventListener('click', () => {
   document.getElementById('filtro-nivel').value = '';
+  document.getElementById('filtro-busca').value = '';
   document.getElementById('result-historico').classList.add('hidden');
   carregarHistorico();
 });
@@ -715,6 +823,60 @@ async function loadSharedAnalysis(token) {
     loadingEl.innerHTML = `<p style="color:var(--danger);text-align:center;padding:40px 0">${escHtml(e.message)}</p>`;
   }
 }
+
+// ── Configurações ──────────────────────────────────────────────────────────
+async function loadSettings() {
+  const user = authUser || {};
+  document.getElementById('settings-name').textContent  = user.name || '—';
+  document.getElementById('settings-email').textContent = user.email || '—';
+  document.getElementById('settings-avatar').textContent = (user.name || '?').charAt(0).toUpperCase();
+
+  try {
+    const res = await apiFetch('/auth/stats');
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById('stats-total').textContent   = s.total_analises;
+    document.getElementById('stats-pecas').textContent   = s.total_pecas;
+    document.getElementById('stats-critico').textContent = s.por_nivel?.CRITICO ?? 0;
+    document.getElementById('stats-membro').textContent  = s.membro_desde || '—';
+  } catch (_) {}
+}
+
+document.getElementById('form-senha').addEventListener('submit', async e => {
+  e.preventDefault();
+  const senhaAtual   = document.getElementById('senha-atual').value;
+  const senhaNova    = document.getElementById('senha-nova').value;
+  const senhaConfirm = document.getElementById('senha-confirma').value;
+  const errEl        = document.getElementById('senha-error');
+  const btn          = document.getElementById('btn-senha');
+
+  errEl.classList.add('hidden');
+  if (senhaNova !== senhaConfirm) {
+    errEl.textContent = 'As senhas novas não coincidem.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Alterando…';
+  try {
+    const res = await apiFetch('/auth/senha', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senha_atual: senhaAtual, nova_senha: senhaNova }),
+    });
+    const data = await res.json().catch(() => ({ detail: `Erro ${res.status}` }));
+    if (!res.ok) throw new Error(data.detail || 'Erro ao alterar senha.');
+    showToast('Senha alterada com sucesso!', 'success');
+    e.target.reset();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Alterar senha';
+  }
+});
 
 // ── Init ───────────────────────────────────────────────────────────────────
 const shareParam = new URLSearchParams(window.location.search).get('share');

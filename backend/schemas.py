@@ -9,6 +9,7 @@ class Achado(BaseModel):
     tipo: str
     nivel_risco: str
     descricao: str
+    confianca: int = 80  # 0-100
 
 
 class ResultadoLayer1(BaseModel):
@@ -17,10 +18,18 @@ class ResultadoLayer1(BaseModel):
     resumo: str
     achados: List[Achado]
     recomendacao: str
+    sugestoes_correcao: List[str] = []
 
     @field_validator("achados", mode="before")
     @classmethod
     def ensure_list(cls, v):
+        if v is None:
+            return []
+        return v
+
+    @field_validator("sugestoes_correcao", mode="before")
+    @classmethod
+    def ensure_sugestoes(cls, v):
         if v is None:
             return []
         return v
@@ -76,8 +85,6 @@ class PecaResponse(BaseModel):
     id_salvo: int
 
 
-# Auth schemas
-
 class UserCreate(BaseModel):
     name: str
     email: str
@@ -102,3 +109,14 @@ class UserResponse(BaseModel):
     email: str
 
     model_config = {"from_attributes": True}
+
+
+class SenhaRequest(BaseModel):
+    senha_atual: str
+    nova_senha: str
+
+
+class PerguntaRequest(BaseModel):
+    pergunta: str
+    texto: Optional[str] = ""
+    contexto_analise: Optional[str] = ""

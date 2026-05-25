@@ -86,6 +86,9 @@
     <a class="nav-item" data-section="historico">
       <span class="nav-icon">☰</span> Histórico
     </a>
+    <a class="nav-item" data-section="config">
+      <span class="nav-icon">⚙</span> Configurações
+    </a>
   </nav>
   <div class="sidebar-user">
     <div class="sidebar-user-info">
@@ -150,6 +153,7 @@
     <div class="form-group">
       <label for="input-texto">Texto do documento</label>
       <textarea id="input-texto" rows="10" placeholder="Cole aqui o texto completo da petição, contestação ou qualquer peça jurídica…"></textarea>
+      <div class="char-counter" id="char-counter">0 caracteres · 0 palavras</div>
     </div>
     <button class="btn btn-primary" id="btn-analisar-texto">
       <span>Analisar</span>
@@ -249,6 +253,10 @@
           <option value="NENHUM">Nenhum</option>
         </select>
       </div>
+      <div class="form-group">
+        <label for="filtro-busca">Buscar</label>
+        <input type="text" id="filtro-busca" placeholder="Nome do arquivo…" />
+      </div>
       <button class="btn btn-ghost" id="btn-filtrar">Filtrar</button>
       <button class="btn btn-ghost" id="btn-refresh-hist">↺ Atualizar</button>
     </div>
@@ -272,6 +280,61 @@
     </div>
 
     <div class="result-panel hidden" id="result-historico" style="margin-top:24px"></div>
+  </section>
+
+  <!-- Configurações -->
+  <section id="section-config" class="section">
+    <h2>Configurações</h2>
+    <p class="section-subtitle">Suas informações e estatísticas de uso</p>
+
+    <h3 class="settings-group-title">Estatísticas de uso</h3>
+    <div class="cards-grid" id="stats-grid">
+      <div class="card">
+        <div class="card-label">Total de Análises</div>
+        <div class="card-value" id="stats-total">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Peças Geradas</div>
+        <div class="card-value" id="stats-pecas">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Nível Crítico</div>
+        <div class="card-value danger" id="stats-critico">—</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Membro desde</div>
+        <div class="card-value" style="font-size:15px;margin-top:8px" id="stats-membro">—</div>
+      </div>
+    </div>
+
+    <h3 class="settings-group-title" style="margin-top:32px">Conta</h3>
+    <div class="settings-card">
+      <div class="settings-info">
+        <div class="settings-avatar" id="settings-avatar">—</div>
+        <div>
+          <div class="settings-name" id="settings-name">—</div>
+          <div class="settings-email" id="settings-email">—</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="settings-group-title" style="margin-top:32px">Alterar senha</h3>
+    <form id="form-senha" class="settings-form">
+      <div class="form-group">
+        <label for="senha-atual">Senha atual</label>
+        <input type="password" id="senha-atual" placeholder="••••••••" required />
+      </div>
+      <div class="form-group">
+        <label for="senha-nova">Nova senha <span class="label-hint">(mín. 6 caracteres)</span></label>
+        <input type="password" id="senha-nova" placeholder="••••••••" required minlength="6" />
+      </div>
+      <div class="form-group">
+        <label for="senha-confirma">Confirmar nova senha</label>
+        <input type="password" id="senha-confirma" placeholder="••••••••" required minlength="6" />
+      </div>
+      <div id="senha-error" class="auth-error hidden"></div>
+      <button type="submit" class="btn btn-primary" id="btn-senha">Alterar senha</button>
+    </form>
   </section>
 
 </main>

@@ -10,14 +10,16 @@ from sqlalchemy.orm import Session
 
 from auth import create_token, get_current_user, hash_password, verify_password
 from database import Analise, PecaGerada, User, create_tables, get_db, migrate_tables
-from detection import analisar_completo, analisar_documento, analisar_pdf, testar_conexao_groq
+from detection import analisar_completo, analisar_documento, analisar_pdf, responder_pergunta, testar_conexao_groq
 from generation import gerar_e_verificar
 from schemas import (
     AnaliseDetalhe,
     AnaliseResumo,
     PecaRequest,
     PecaResponse,
+    PerguntaRequest,
     ResultadoCompleto,
+    SenhaRequest,
     TextoRequest,
     TokenResponse,
     UserCreate,
@@ -94,6 +96,72 @@ def login(req: UserLogin, db: Session = Depends(get_db)):
 @app.get("/auth/me", response_model=UserResponse)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@app.put("/auth/senha")
+def trocar_senha(
+    req: SenhaRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from auth import verify_password as vp, hash_password as hp
+    if not vp(req.senha_atual, user.password_hash):
+        raise HTTPException(400, "Senha atual incorreta.")
+    if len(req.nova_senha) < 6:
+        raise HTTPException(400, "A nova senha deve ter pelo menos 6 caracteres.")
+    user.password_hash = hp(req.nova_senha)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/auth/stats")
+def get_stats(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    analises = db.query(Analise).filter(Analise.user_id == user.id).all()
+    pecas = db.query(PecaGerada).filter(PecaGerada.user_id == user.id).count()
+    por_nivel = {
+        "CRITICO": sum(1 for a in analises if a.nivel_geral == "CRITICO"),
+        "ALTO":    sum(1 for a in analises if a.nivel_geral == "ALTO"),
+        "MEDIO":   sum(1 for a in analises if a.nivel_geral == "MEDIO"),
+        "BAIXO":   sum(1 for a in analises if a.nivel_geral == "BAIXO"),
+        "NENHUM":  sum(1 for a in analises if a.nivel_geral == "NENHUM"),
+    }
+    membro_desde = user.created_at.strftime("%d/%m/%Y") if user.created_at else "—"
+    return {
+        "total_analises": len(analises),
+        "total_pecas": pecas,
+        "por_nivel": por_nivel,
+        "membro_desde": membro_desde,
+    }
+
+
+# ── Chat ──────────────────────────────────────────────────────────────────────
+
+@app.post("/perguntar")
+def perguntar(req: PerguntaRequest, user: User = Depends(get_current_user)):
+    if not req.pergunta.strip():
+        raise HTTPException(400, "A pergunta não pode estar vazia.")
+    resposta = responder_pergunta(req.pergunta, req.texto or "", req.contexto_analise or "")
+    return {"resposta": resposta}
+
+
+@app.post("/perguntar/analise/{analise_id}")
+def perguntar_sobre_analise(
+    analise_id: int,
+    req: PerguntaRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    registro = db.query(Analise).filter(Analise.id == analise_id, Analise.user_id == user.id).first()
+    if not registro:
+        raise HTTPException(404, "Análise não encontrada.")
+    if not req.pergunta.strip():
+        raise HTTPException(400, "A pergunta não pode estar vazia.")
+    contexto = f"Resumo: {registro.resumo}\nRecomendação: {registro.recomendacao}\nAchados: {registro.achados}"
+    resposta = responder_pergunta(req.pergunta, req.texto or "", contexto)
+    return {"resposta": resposta}
 
 
 # ── Análise ───────────────────────────────────────────────────────────────────
