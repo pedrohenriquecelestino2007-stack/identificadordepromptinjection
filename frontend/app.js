@@ -461,10 +461,18 @@ pdfInput.addEventListener('change', () => {
   if (pdfInput.files[0]) setPdfFile(pdfInput.files[0]);
 });
 
+const MAX_FILE_MB = 20;
+
 function setPdfFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (!['pdf', 'docx', 'txt'].includes(ext)) {
     showToast('Formato não suportado. Use PDF, DOCX ou TXT.');
+    return;
+  }
+  const sizeMb = file.size / (1024 * 1024);
+  if (sizeMb > MAX_FILE_MB) {
+    showToast(`Arquivo muito grande (${sizeMb.toFixed(1)} MB). O limite é ${MAX_FILE_MB} MB.`);
+    pdfInput.value = '';
     return;
   }
   selectedPdfFile = file;
