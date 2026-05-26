@@ -509,14 +509,36 @@ function closePdfPreview() {
 document.getElementById('btn-analisar-pdf').addEventListener('click', async () => {
   if (!selectedPdfFile) { showToast('Selecione um arquivo primeiro.'); return; }
 
-  const resultEl = document.getElementById('result-pdf');
+  const resultEl  = document.getElementById('result-pdf');
+  const msgEl     = document.getElementById('loading-pdf-msg');
   resultEl.classList.add('hidden');
   setLoading('loading-pdf', btnPdf, true);
+
+  const sizeMb = (selectedPdfFile.size / (1024 * 1024)).toFixed(1);
+  msgEl.textContent = `Enviando arquivo (${sizeMb} MB)…`;
+
+  const progressMsgs = [
+    [8000,  'Extraindo texto do documento…'],
+    [20000, 'Escaneando conteúdo oculto…'],
+    [35000, 'Analisando com IA (camada 1)…'],
+    [55000, 'Auditando resultado (camada 2)…'],
+    [90000, 'Finalizando… pode levar mais alguns segundos'],
+  ];
+  const timers = progressMsgs.map(([delay, msg]) =>
+    setTimeout(() => { if (msgEl) msgEl.textContent = msg; }, delay)
+  );
+
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 180000); // 3 min
 
   try {
     const form = new FormData();
     form.append('file', selectedPdfFile);
-    const res = await apiFetch('/analisar/pdf', { method: 'POST', body: form });
+    const res = await apiFetch('/analisar/pdf', {
+      method: 'POST',
+      body: form,
+      signal: controller.signal,
+    });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || 'Erro desconhecido');
@@ -525,9 +547,16 @@ document.getElementById('btn-analisar-pdf').addEventListener('click', async () =
     renderResultado(resultEl, data, `Análise: ${selectedPdfFile.name}`, data.id_salvo || null);
     refreshDashboard();
   } catch (e) {
-    showToast(`Erro: ${e.message}`);
+    if (e.name === 'AbortError') {
+      showToast('Tempo esgotado (3 min). O arquivo pode ser grande demais para o servidor gratuito. Tente um arquivo menor.');
+    } else {
+      showToast(`Erro: ${e.message}`);
+    }
   } finally {
+    timers.forEach(clearTimeout);
+    clearTimeout(timeoutId);
     setLoading('loading-pdf', btnPdf, false);
+    msgEl.textContent = 'Enviando arquivo…';
   }
 });
 
