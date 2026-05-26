@@ -50,6 +50,36 @@ def startup():
     migrate_tables()
 
 
+@app.post("/debug/pdf")
+async def debug_pdf(file: UploadFile = File(...)):
+    import time, traceback
+    result = {"etapas": []}
+    try:
+        t0 = time.time()
+        conteudo = await file.read()
+        result["etapas"].append({"etapa": "leitura", "tamanho_mb": round(len(conteudo)/1024/1024, 2), "seg": round(time.time()-t0, 2)})
+
+        t1 = time.time()
+        import fitz
+        doc = fitz.open(stream=conteudo, filetype="pdf")
+        n_pages = len(doc)
+        doc.close()
+        result["etapas"].append({"etapa": "fitz_open", "paginas": n_pages, "seg": round(time.time()-t1, 2)})
+
+        from detection import _limite_paginas, _extrair_texto_pdf
+        t2 = time.time()
+        limite = _limite_paginas(len(conteudo))
+        texto = _extrair_texto_pdf(conteudo)
+        result["etapas"].append({"etapa": "extracao_texto", "limite_pags": limite, "chars": len(texto), "seg": round(time.time()-t2, 2)})
+
+        result["ok"] = True
+    except Exception as e:
+        result["ok"] = False
+        result["erro"] = str(e)
+        result["traceback"] = traceback.format_exc()
+    return result
+
+
 @app.get("/health")
 def health():
     key = os.environ.get("GROQ_API_KEY", "NAO_DEFINIDA")
