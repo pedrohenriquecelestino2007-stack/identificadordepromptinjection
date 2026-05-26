@@ -203,80 +203,67 @@ def _limite_paginas(size_bytes: int) -> int | None:
     return None  # sem limite
 
 
-def _detectar_ocultos_pdf(conteudo_bytes: bytes) -> list[str]:
-    """Detecta texto branco, fonte minúscula e páginas só com imagem via pymupdf."""
+def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
+    """Extrai texto e detecta conteúdo oculto em uma única passagem via pymupdf."""
     try:
-        import fitz  # pymupdf
+        import fitz
     except ImportError:
-        return []
+        raise HTTPException(500, "pymupdf não instalado no servidor.")
 
     limite = _limite_paginas(len(conteudo_bytes))
     alertas: list[str] = []
+    partes_texto: list[str] = []
+
     try:
         doc = fitz.open(stream=conteudo_bytes, filetype="pdf")
+        total = len(doc)
         paginas = doc[:limite] if limite else doc
-        for page_num, page in enumerate(paginas, 1):
-            page_text = page.get_text().strip()
-            images = page.get_images(full=False)
 
-            if images and not page_text:
+        if limite and total > limite:
+            partes_texto.append(
+                f"[NOTA: documento com {total} páginas — analisando primeiras {limite}]"
+            )
+
+        for page_num, page in enumerate(paginas, 1):
+            # Extração de texto
+            texto = page.get_text()
+            partes_texto.append(f"[PÁGINA {page_num}]\n{texto}")
+
+            # Detecção de conteúdo oculto
+            images = page.get_images(full=False)
+            if images and not texto.strip():
                 alertas.append(
-                    f"[PÁGINA {page_num} — SÓ IMAGEM]: {len(images)} imagem(ns) sem texto extraível "
-                    f"— possível instrução oculta embutida em imagem"
+                    f"[PÁGINA {page_num} — SÓ IMAGEM]: {len(images)} imagem(ns) sem texto"
                 )
 
-            rawdict = page.get_text("rawdict", flags=0)
-            for block in rawdict.get("blocks", []):
+            for block in page.get_text("rawdict", flags=0).get("blocks", []):
                 if block.get("type") != 0:
                     continue
                 for line in block.get("lines", []):
                     for span in line.get("spans", []):
-                        text = span.get("text", "").strip()
-                        if len(text) < 3:
+                        t = span.get("text", "").strip()
+                        if len(t) < 3:
                             continue
                         size = span.get("size", 12)
                         color = span.get("color", 0)
-                        r = (color >> 16) & 0xFF
-                        g = (color >> 8) & 0xFF
-                        b = color & 0xFF
+                        r, g, b = (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF
                         if r > 240 and g > 240 and b > 240:
-                            alertas.append(
-                                f"[TEXTO BRANCO OCULTO — Página {page_num}]: \"{text[:300]}\""
-                            )
+                            alertas.append(f"[TEXTO BRANCO — Página {page_num}]: \"{t[:300]}\"")
                         elif size < 2:
-                            alertas.append(
-                                f"[TEXTO MINÚSCULO {size:.1f}pt — Página {page_num}]: \"{text[:300]}\""
-                            )
+                            alertas.append(f"[TEXTO MINÚSCULO {size:.1f}pt — Página {page_num}]: \"{t[:300]}\"")
         doc.close()
+    except HTTPException:
+        raise
     except Exception as exc:
-        print(f"[pymupdf scan] {exc}")
-    return alertas
+        raise HTTPException(422, f"Não foi possível processar o PDF: {exc}")
 
-
-def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
-    import pdfplumber
-
-    limite = _limite_paginas(len(conteudo_bytes))
-    ocultos = _detectar_ocultos_pdf(conteudo_bytes)
     partes: list[str] = []
-
-    if ocultos:
-        partes.append(
-            "⚠ PRÉ-ANÁLISE DETECTOU CONTEÚDO SUSPEITO:\n" + "\n".join(ocultos)
-        )
-
-    with pdfplumber.open(io.BytesIO(conteudo_bytes)) as pdf:
-        paginas = pdf.pages[:limite] if limite else pdf.pages
-        total = len(pdf.pages)
-        if limite and total > limite:
-            partes.append(f"[NOTA: documento com {total} páginas — analisando primeiras {limite} páginas]")
-        for page in paginas:
-            texto = page.extract_text() or ""
-            partes.append(f"[PÁGINA {page.page_number}]\n{texto}")
+    if alertas:
+        partes.append("⚠ PRÉ-ANÁLISE DETECTOU CONTEÚDO SUSPEITO:\n" + "\n".join(alertas))
+    partes.extend(partes_texto)
 
     resultado = "\n\n".join(partes)
 
-    # Truncagem inteligente para documentos muito longos
     if len(resultado) > 60_000:
         mid = len(resultado) // 2
         resultado = (
