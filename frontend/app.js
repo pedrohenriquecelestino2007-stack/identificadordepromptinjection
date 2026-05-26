@@ -461,7 +461,7 @@ pdfInput.addEventListener('change', () => {
   if (pdfInput.files[0]) setPdfFile(pdfInput.files[0]);
 });
 
-const MAX_FILE_MB = 20;
+const MAX_FILE_MB = 50;
 
 function setPdfFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();

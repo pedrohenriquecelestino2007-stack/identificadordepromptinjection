@@ -208,8 +208,8 @@ async def analisar_pdf_endpoint(
         raise HTTPException(400, "Formato não suportado. Envie PDF, DOCX ou TXT.")
 
     conteudo = await file.read()
-    if len(conteudo) > 20 * 1024 * 1024:
-        raise HTTPException(413, "Arquivo muito grande. Limite máximo: 20 MB.")
+    if len(conteudo) > 50 * 1024 * 1024:
+        raise HTTPException(413, "Arquivo muito grande. Limite máximo: 50 MB.")
 
     l1, l2 = analisar_documento(conteudo, file.filename)
 
