@@ -196,6 +196,13 @@ def analisar_completo(texto: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:
     return l1, l2
 
 
+def _limite_paginas(size_bytes: int) -> int | None:
+    mb = size_bytes / (1024 * 1024)
+    if mb > 15: return 60
+    if mb > 5:  return 120
+    return None  # sem limite
+
+
 def _detectar_ocultos_pdf(conteudo_bytes: bytes) -> list[str]:
     """Detecta texto branco, fonte minúscula e páginas só com imagem via pymupdf."""
     try:
@@ -203,10 +210,12 @@ def _detectar_ocultos_pdf(conteudo_bytes: bytes) -> list[str]:
     except ImportError:
         return []
 
+    limite = _limite_paginas(len(conteudo_bytes))
     alertas: list[str] = []
     try:
         doc = fitz.open(stream=conteudo_bytes, filetype="pdf")
-        for page_num, page in enumerate(doc, 1):
+        paginas = doc[:limite] if limite else doc
+        for page_num, page in enumerate(paginas, 1):
             page_text = page.get_text().strip()
             images = page.get_images(full=False)
 
@@ -247,6 +256,7 @@ def _detectar_ocultos_pdf(conteudo_bytes: bytes) -> list[str]:
 def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
     import pdfplumber
 
+    limite = _limite_paginas(len(conteudo_bytes))
     ocultos = _detectar_ocultos_pdf(conteudo_bytes)
     partes: list[str] = []
 
@@ -256,7 +266,11 @@ def _extrair_texto_pdf(conteudo_bytes: bytes) -> str:
         )
 
     with pdfplumber.open(io.BytesIO(conteudo_bytes)) as pdf:
-        for page in pdf.pages:
+        paginas = pdf.pages[:limite] if limite else pdf.pages
+        total = len(pdf.pages)
+        if limite and total > limite:
+            partes.append(f"[NOTA: documento com {total} páginas — analisando primeiras {limite} páginas]")
+        for page in paginas:
             texto = page.extract_text() or ""
             partes.append(f"[PÁGINA {page.page_number}]\n{texto}")
 
