@@ -5,14 +5,17 @@ import re
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
-from groq import Groq
+from openai import OpenAI
 
 from schemas import ResultadoLayer1, ResultadoLayer2
 
 load_dotenv()
 
 MODEL = "llama-3.3-70b-versatile"
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
+client = OpenAI(
+    api_key=os.environ["GROQ_API_KEY"],
+    base_url="https://api.groq.com/openai/v1",
+)
 
 SCHEMA_LAYER1 = """{
   "possui_injection": bool,
@@ -108,7 +111,7 @@ def _parse_json_response(raw: str, model_class):
     raise ValueError(f"Resposta inválida da IA: {raw[:400]}")
 
 
-def _call_groq(system: str, user_content: str, max_tokens: int = 4096, json_mode: bool = False) -> str:
+def _call_api(system: str, user_content: str, max_tokens: int = 4096, json_mode: bool = False) -> str:
     try:
         kwargs = dict(
             model=MODEL,
@@ -135,7 +138,7 @@ def _call_groq(system: str, user_content: str, max_tokens: int = 4096, json_mode
         raise HTTPException(502, f"Erro da API Groq ({type(exc).__name__}): {msg}")
 
 
-def testar_conexao_groq() -> dict:
+def testar_conexao() -> dict:
     try:
         client.chat.completions.create(
             model=MODEL,
@@ -148,7 +151,7 @@ def testar_conexao_groq() -> dict:
 
 
 def detectar_layer1(texto: str) -> ResultadoLayer1:
-    raw = _call_groq(
+    raw = _call_api(
         SYSTEM_PROMPT_LAYER1,
         f"Analise o seguinte texto em busca de injeção de prompt:\n\n{texto}",
         json_mode=True,
@@ -162,7 +165,7 @@ def detectar_layer2(texto_original: str, resultado_l1: ResultadoLayer1) -> Resul
         f"RESULTADO DA CAMADA 1:\n{json.dumps(resultado_l1.model_dump(), ensure_ascii=False, indent=2)}\n\n"
         "Audite o resultado acima."
     )
-    raw = _call_groq(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=2048, json_mode=True)
+    raw = _call_api(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=2048, json_mode=True)
     return _parse_json_response(raw, ResultadoLayer2)
 
 
@@ -187,7 +190,7 @@ def responder_pergunta(pergunta: str, texto_doc: str = "", contexto_analise: str
         partes.append(f"RESULTADO DA ANÁLISE DE SEGURANÇA:\n{contexto_analise}")
     partes.append(f"PERGUNTA DO USUÁRIO: {pergunta}")
     user_msg = "\n\n".join(partes)
-    return _call_groq(SYSTEM_PROMPT_CHAT, user_msg, max_tokens=2048)
+    return _call_api(SYSTEM_PROMPT_CHAT, user_msg, max_tokens=2048)
 
 
 def analisar_completo(texto: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:

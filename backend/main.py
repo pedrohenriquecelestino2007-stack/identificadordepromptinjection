@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from auth import create_token, get_current_user, hash_password, verify_password
 from database import Analise, PecaGerada, User, create_tables, get_db, migrate_tables
-from detection import analisar_completo, analisar_documento, analisar_pdf, responder_pergunta, testar_conexao_groq
+from detection import analisar_completo, analisar_documento, analisar_pdf, responder_pergunta, testar_conexao
 from generation import gerar_e_verificar
 from schemas import (
     AnaliseDetalhe,
@@ -84,13 +84,13 @@ async def debug_pdf(file: UploadFile = File(...)):
 def health():
     key = os.environ.get("GROQ_API_KEY", "NAO_DEFINIDA")
     key_suffix = key[-6:] if len(key) > 6 else key
-    groq = testar_conexao_groq()
+    api = testar_conexao()
     return {
-        "status": "ok" if groq["status"] == "ok" else "degradado",
+        "status": "ok" if api["status"] == "ok" else "degradado",
         "model": "llama-3.3-70b-versatile",
         "key_suffix": key_suffix,
-        "groq_api": groq["status"],
-        "groq_erro": groq["erro"],
+        "groq_api": api["status"],
+        "groq_erro": api["erro"],
     }
 
 
