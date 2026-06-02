@@ -87,7 +87,7 @@ def health():
     api = testar_conexao()
     return {
         "status": "ok" if api["status"] == "ok" else "degradado",
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.1-8b-instant",
         "key_suffix": key_suffix,
         "groq_api": api["status"],
         "groq_erro": api["erro"],
