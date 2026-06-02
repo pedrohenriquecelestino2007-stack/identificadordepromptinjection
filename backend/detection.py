@@ -2,6 +2,7 @@ import io
 import json
 import os
 import re
+import time
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
@@ -111,31 +112,41 @@ def _parse_json_response(raw: str, model_class):
     raise ValueError(f"Resposta inválida da IA: {raw[:400]}")
 
 
-def _call_api(system: str, user_content: str, max_tokens: int = 4096, json_mode: bool = False) -> str:
-    try:
-        kwargs = dict(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_content},
-            ],
-            max_tokens=max_tokens,
-        )
-        if json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
-        response = client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content
-    except HTTPException:
-        raise
-    except Exception as exc:
-        msg = str(exc)
-        print(f"[GROQ ERROR] tipo={type(exc).__name__} msg={msg}")
-        msg_lower = msg.lower()
-        if any(k in msg_lower for k in ("api_key", "api key", "invalid", "authentication", "unauthorized")):
-            raise HTTPException(401, f"GROQ_API_KEY inválida ou sem permissão. Detalhe: {msg}")
-        if any(k in msg_lower for k in ("quota", "rate limit", "rate_limit", "too many")) or "429" in msg:
-            raise HTTPException(429, f"Cota da API Groq esgotada. Detalhe: {msg}")
-        raise HTTPException(502, f"Erro da API Groq ({type(exc).__name__}): {msg}")
+def _call_api(system: str, user_content: str, max_tokens: int = 1024, json_mode: bool = False) -> str:
+    for attempt in range(2):
+        try:
+            kwargs = dict(
+                model=MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_content},
+                ],
+                max_tokens=max_tokens,
+            )
+            if json_mode:
+                kwargs["response_format"] = {"type": "json_object"}
+            response = client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content
+        except HTTPException:
+            raise
+        except Exception as exc:
+            msg = str(exc)
+            print(f"[GROQ ERROR] tentativa={attempt+1} tipo={type(exc).__name__} msg={msg}")
+            msg_lower = msg.lower()
+            is_rate_limit = any(k in msg_lower for k in ("quota", "rate limit", "rate_limit", "too many")) or "429" in msg
+            if is_rate_limit and attempt == 0:
+                wait = 35
+                m = re.search(r"retry_after_seconds[^\d]*(\d+)", msg)
+                if m:
+                    wait = int(m.group(1)) + 2
+                print(f"[GROQ] rate limit, aguardando {wait}s...")
+                time.sleep(wait)
+                continue
+            if any(k in msg_lower for k in ("api_key", "api key", "invalid", "authentication", "unauthorized")):
+                raise HTTPException(401, f"GROQ_API_KEY inválida ou sem permissão. Detalhe: {msg}")
+            if is_rate_limit:
+                raise HTTPException(429, f"Cota da API Groq esgotada. Tente novamente em instantes.")
+            raise HTTPException(502, f"Erro da API Groq ({type(exc).__name__}): {msg}")
 
 
 def testar_conexao() -> dict:
@@ -154,6 +165,7 @@ def detectar_layer1(texto: str) -> ResultadoLayer1:
     raw = _call_api(
         SYSTEM_PROMPT_LAYER1,
         f"Analise o seguinte texto em busca de injeção de prompt:\n\n{texto}",
+        max_tokens=1024,
         json_mode=True,
     )
     return _parse_json_response(raw, ResultadoLayer1)
@@ -165,7 +177,7 @@ def detectar_layer2(texto_original: str, resultado_l1: ResultadoLayer1) -> Resul
         f"RESULTADO DA CAMADA 1:\n{json.dumps(resultado_l1.model_dump(), ensure_ascii=False, indent=2)}\n\n"
         "Audite o resultado acima."
     )
-    raw = _call_api(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=2048, json_mode=True)
+    raw = _call_api(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=512, json_mode=True)
     return _parse_json_response(raw, ResultadoLayer2)
 
 
