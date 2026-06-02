@@ -34,7 +34,7 @@ def gerar_peca(tipo_peca: str, fatos: str, pedidos: str, partes: str) -> str:
         f"\nFatos:\n{fatos}"
         f"{pedidos_bloco}"
     )
-    return _call_api(SYSTEM_PROMPT_GERACAO, user_msg, max_tokens=8192)
+    return _call_api(SYSTEM_PROMPT_GERACAO, user_msg, max_tokens=16384)
 
 
 def gerar_e_verificar(

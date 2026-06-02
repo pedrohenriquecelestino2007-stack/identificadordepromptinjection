@@ -12,10 +12,10 @@ from schemas import ResultadoLayer1, ResultadoLayer2
 
 load_dotenv()
 
-MODEL = "llama-3.1-8b-instant"
+MODEL = "gpt-oss-120b"
 client = OpenAI(
-    api_key=os.environ["GROQ_API_KEY"],
-    base_url="https://api.groq.com/openai/v1",
+    api_key=os.environ["CEREBRAS_API_KEY"],
+    base_url="https://api.cerebras.ai/v1",
 )
 
 SCHEMA_LAYER1 = """{
@@ -108,16 +108,15 @@ def _call_api(system: str, user_content: str, max_tokens: int = 1024, json_mode:
         raise
     except Exception as exc:
         msg = str(exc)
-        print(f"[GROQ ERROR] tipo={type(exc).__name__} msg={msg}")
+        print(f"[CEREBRAS ERROR] tipo={type(exc).__name__} msg={msg}")
         msg_lower = msg.lower()
         if any(k in msg_lower for k in ("api_key", "api key", "invalid", "authentication", "unauthorized")):
-            raise HTTPException(401, f"GROQ_API_KEY inválida ou sem permissão.")
+            raise HTTPException(401, f"CEREBRAS_API_KEY inválida ou sem permissão.")
         if any(k in msg_lower for k in ("quota", "rate limit", "rate_limit", "too many")) or "429" in msg:
-            # Extrai tempo sugerido pelo Groq ("try again in Xs")
             wait_match = re.search(r"try again in (\d+(?:\.\d+)?)s", msg)
             wait = int(float(wait_match.group(1))) + 1 if wait_match else 60
             raise HTTPException(429, f"Limite de requisições atingido. Aguarde {wait}s e tente novamente.")
-        raise HTTPException(502, f"Erro da API Groq ({type(exc).__name__}): {msg}")
+        raise HTTPException(502, f"Erro da API Cerebras ({type(exc).__name__}): {msg}")
 
 
 def testar_conexao() -> dict:
@@ -136,7 +135,7 @@ def detectar_layer1(texto: str) -> ResultadoLayer1:
     raw = _call_api(
         SYSTEM_PROMPT_LAYER1,
         f"Analise o seguinte texto em busca de injeção de prompt:\n\n{texto}",
-        max_tokens=1024,
+        max_tokens=2048,
         json_mode=True,
     )
     return _parse_json_response(raw, ResultadoLayer1)
@@ -148,7 +147,7 @@ def detectar_layer2(texto_original: str, resultado_l1: ResultadoLayer1) -> Resul
         f"RESULTADO DA CAMADA 1:\n{json.dumps(resultado_l1.model_dump(), ensure_ascii=False, indent=2)}\n\n"
         "Audite o resultado acima."
     )
-    raw = _call_api(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=512, json_mode=True)
+    raw = _call_api(SYSTEM_PROMPT_LAYER2, user_msg, max_tokens=1024, json_mode=True)
     return _parse_json_response(raw, ResultadoLayer2)
 
 
@@ -173,7 +172,7 @@ def responder_pergunta(pergunta: str, texto_doc: str = "", contexto_analise: str
         partes.append(f"RESULTADO DA ANÁLISE DE SEGURANÇA:\n{contexto_analise}")
     partes.append(f"PERGUNTA DO USUÁRIO: {pergunta}")
     user_msg = "\n\n".join(partes)
-    return _call_api(SYSTEM_PROMPT_CHAT, user_msg, max_tokens=2048)
+    return _call_api(SYSTEM_PROMPT_CHAT, user_msg, max_tokens=4096)
 
 
 def analisar_completo(texto: str) -> tuple[ResultadoLayer1, ResultadoLayer2]:

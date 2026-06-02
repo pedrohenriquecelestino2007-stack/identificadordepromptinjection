@@ -83,15 +83,15 @@ async def debug_pdf(file: UploadFile = File(...)):
 
 @app.get("/health")
 def health():
-    key = os.environ.get("GROQ_API_KEY", "NAO_DEFINIDA")
+    key = os.environ.get("CEREBRAS_API_KEY", "NAO_DEFINIDA")
     key_suffix = key[-6:] if len(key) > 6 else key
     api = testar_conexao()
     return {
         "status": "ok" if api["status"] == "ok" else "degradado",
-        "model": "llama-3.1-8b-instant",
+        "model": "gpt-oss-120b",
         "key_suffix": key_suffix,
-        "groq_api": api["status"],
-        "groq_erro": api["erro"],
+        "cerebras_api": api["status"],
+        "cerebras_erro": api["erro"],
     }
 
 
