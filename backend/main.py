@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import secrets
@@ -241,7 +242,7 @@ async def analisar_pdf_endpoint(
     if len(conteudo) > 50 * 1024 * 1024:
         raise HTTPException(413, "Arquivo muito grande. Limite máximo: 50 MB.")
 
-    l1, l2 = analisar_documento(conteudo, file.filename)
+    l1, l2 = await asyncio.to_thread(analisar_documento, conteudo, file.filename)
 
     registro = Analise(
         user_id=user.id,
